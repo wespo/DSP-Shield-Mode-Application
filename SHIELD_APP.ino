@@ -49,7 +49,7 @@ unsigned short writeBufIndex = 0;
 
 //IIR Buffers
 #define IIR_ORDER_MAX    (80)
-#define DELAY_COUNT      (4)
+#define DELAY_COUNT      (5)
 #define COEFFS_PER_BIQUAD (6)
 #define IIR_DELAY_BUF_SIZE   ((IIR_ORDER_MAX/2)*(DELAY_COUNT))
 
@@ -64,11 +64,11 @@ int IIROrderL = 0;
 int IIROrderR = 0;
 // Delay buffer used by the IIR filtering algorithm for Left Channel
 #pragma DATA_ALIGN(32);
-int IIRdelayBufferL[IIR_DELAY_BUF_SIZE] = {0};
+long IIRdelayBufferL[IIR_DELAY_BUF_SIZE] = {0};
 
 // Delay buffer used by the IIR filtering algorithm for Right Channel
 #pragma DATA_ALIGN(32);
-int IIRdelayBufferR[IIR_DELAY_BUF_SIZE] = {0};
+long IIRdelayBufferR[IIR_DELAY_BUF_SIZE] = {0};
 
 //determines if copy from the codec is enabled
 int inputCodec = 0;
@@ -271,6 +271,7 @@ void setup()
     {
         AudioC.attachIntr(dmaIsr);
     }  
+    AudioC.setOutputVolume(94);
     //shieldMailbox.begin(SPI_MASTER, readFilter);
 
     //initialize DDS module for both left and right channels
@@ -295,7 +296,7 @@ void loop()
   {
     heartbeat = 1;
   }
-  //digitalWrite(LED1, heartbeat);
+  digitalWrite(LED1, heartbeat);
   
   if(messageStateMachine(arduinoMessageState))
   {
@@ -665,5 +666,5 @@ void readFilter()
   {
     ledBlink = 1;
   }
-  //digitalWrite(LED0, ledBlink);
+  digitalWrite(LED0, ledBlink);
 }
