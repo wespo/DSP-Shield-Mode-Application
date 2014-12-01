@@ -115,51 +115,28 @@ interrupt void dmaIsr(void)
 
         ddsGen(ddsConfigLeft, filterIn1, I2S_DMA_BUF_LEN);
         ddsGen(ddsConfigRight, filterIn2, I2S_DMA_BUF_LEN);
+        processIIR(lpfL);
+        processIIR(lpfR);
         
-        if(FIRTagL && !IIRTagL) //FIR Only
+        processIIR(hpfL);
+        processIIR(hpfR);
+        if(FIRTagL) //FIR Only
         {
           // Filter Left Audio Channel
-          filter_fir(filterIn1, FIRcoeffsL, filterOut1, delayBufferL, I2S_DMA_BUF_LEN, filterLen);
+          filter_fir(hpfL.dst, FIRcoeffsL, filterOut1, delayBufferL, I2S_DMA_BUF_LEN, filterLen);
         }
-        if(IIRTagL && !FIRTagL) //IIR Only
+        if(!FIRTagL) //No Filtering
         {
-          // Filter Left Audio Channel
-          filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn1, filterOut1, IIRcoeffsL, IIRdelayBufferL, IIROrderL);
+          copyShortBuf(hpfL.dst, filterOut1, I2S_DMA_BUF_LEN);
         }
-        if(IIRTagL && FIRTagL) //Both
-        {
-          // Filter Left Audio Channel
-          filter_fir(filterIn1, FIRcoeffsL, filterOut1, delayBufferL, I2S_DMA_BUF_LEN, filterLen);
-          copyShortBuf(filterOut1, filterIn1, I2S_DMA_BUF_LEN); //copy back
-          // Filter Audio Channels, Fernando Algorithm
-          filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn1, filterOut1, IIRcoeffsL, IIRdelayBufferL, IIROrderL);
-        }
-        if(!FIRTagL && !IIRTagL) //No Filtering
-        {
-          copyShortBuf(filterIn1, filterOut1, I2S_DMA_BUF_LEN);
-        }
-        if(FIRTagR && !IIRTagR) //FIR Only
-        {
-        // Filter Right Audio Channel
-        filter_fir(filterIn2, FIRcoeffsR, filterOut2, delayBufferR, I2S_DMA_BUF_LEN, filterLen);
-        }
-        if(IIRTagR && !FIRTagR) //IIR Only
+        if(FIRTagR) //FIR Only
         {
           // Filter Right Audio Channel
-          filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn2, filterOut2, IIRcoeffsR, IIRdelayBufferR, IIROrderR);
-          filterBufAvailable = 1;
+          filter_fir(hpfR.dst, FIRcoeffsR, filterOut2, delayBufferR, I2S_DMA_BUF_LEN, filterLen);
         }
-        if(IIRTagR && FIRTagR) //Both
+        if(!FIRTagR) //No Filtering
         {
-          // Filter Right Audio Channel
-          filter_fir(filterIn2, FIRcoeffsR, filterOut2, delayBufferR, I2S_DMA_BUF_LEN, filterLen);
-          copyShortBuf(filterOut2, filterIn2, I2S_DMA_BUF_LEN);
-          //Filter Audio Channels, Fernando Algorithm
-          filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn2, filterOut2, IIRcoeffsR, IIRdelayBufferR, IIROrderR);
-        }
-        if(!FIRTagR && !IIRTagR) //No Filtering
-        {
-          copyShortBuf(filterIn2, filterOut2, I2S_DMA_BUF_LEN);
+          copyShortBuf(hpfR.dst, filterOut2, I2S_DMA_BUF_LEN);
         }
         filterBufAvailable = 1;
         updateSpectrumPointer(fftConfigLeft, filterIn1, filterOut1, (int **) AudioC.audioInLeft); //pick the left source buffer
@@ -221,6 +198,12 @@ void setup()
     ddsConfigInit(ddsConfigRight);
     fftConfigLeft = FFTInit();
     fftConfigRight = FFTInit();
+    
+    //initialize 4 IIR blocks to point to the inputs.
+    lpfL = initIIR(filterIn1, filterIn1);
+    lpfR = initIIR(filterIn2, filterIn2);
+    hpfL = initIIR(filterIn1, filterIn1);
+    hpfR = initIIR(filterIn2, filterIn2);
 
     //initialize mailbox per byte machine.
     arduinoMessageState = initMessageStateData(arduinoMessageState);
