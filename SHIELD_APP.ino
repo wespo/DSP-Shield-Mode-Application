@@ -8,7 +8,12 @@
 #include "SPI.h"
 #include "mailbox.h"
 #include "SD.h"
+
+//FIR Filtering
 #include "filterFir.h"
+
+//IIR Filtering
+#include "filterIir.h"
 
 //general defines
 #define CHAN_LEFT 0
@@ -46,29 +51,6 @@ unsigned short filterBufAvailable = 0;
 
 // Variable to switch between the data buffers of the Audio library
 unsigned short writeBufIndex = 0;
-
-//IIR Buffers
-#define IIR_ORDER_MAX    (80)
-#define DELAY_COUNT      (5)
-#define COEFFS_PER_BIQUAD (6)
-#define IIR_DELAY_BUF_SIZE   ((IIR_ORDER_MAX/2)*(DELAY_COUNT))
-
-volatile int IIRTagL = 0;
-volatile int IIRTagR = 0;
-#pragma DATA_ALIGN(32);
-int IIRcoeffsL[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
-int IIRGainL = 1;
-int IIRcoeffsR[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
-int IIRGainR = 1;
-int IIROrderL = 0;
-int IIROrderR = 0;
-// Delay buffer used by the IIR filtering algorithm for Left Channel
-#pragma DATA_ALIGN(32);
-long IIRdelayBufferL[IIR_DELAY_BUF_SIZE] = {0};
-
-// Delay buffer used by the IIR filtering algorithm for Right Channel
-#pragma DATA_ALIGN(32);
-long IIRdelayBufferR[IIR_DELAY_BUF_SIZE] = {0};
 
 //determines if copy from the codec is enabled
 int inputCodec = 0;
@@ -117,20 +99,6 @@ interrupt void dmaIsr(void)
                          I2S_DMA_BUF_LEN);
             copyShortBuf(filterOut2, AudioC.audioOutRight[writeBufIndex],
                          I2S_DMA_BUF_LEN);
-//            for(int i = 0; i<256; i++)
-//            {
-//              AudioC.audioOutRight[writeBufIndex][i*2] = fftConfigRight.buffer[i];
-//              AudioC.audioOutRight[writeBufIndex][i*2+1]= fftConfigRight.buffer[i];
-//            }
-////for(int i = 0; i < 256; i++)
-////{
-////  AudioC.audioOutRight[writeBufIndex][i] = 32767;
-////}
-////for(int i = 256; i < 512; i++)
-////{
-////  AudioC.audioOutRight[writeBufIndex][i] = -32768;
-////}
-//        AudioC.audioOutRight[writeBufIndex][0] = 32767;
             filterBufAvailable = 0;
         }
     }
@@ -156,14 +124,7 @@ interrupt void dmaIsr(void)
         if(IIRTagL && !FIRTagL) //IIR Only
         {
           // Filter Left Audio Channel
-          //filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn1, filterOut1, IIRcoeffsL, IIRdelayBufferL, IIR_ORDER_MAX);
-          //iircas5((DATA*)filterIn1,(DATA*)IIRcoeffsL,(DATA*)filterOut1,(DATA*)IIRdelayBufferL,IIR_ORDER_MAX/2,I2S_DMA_BUF_LEN);
           filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn1, filterOut1, IIRcoeffsL, IIRdelayBufferL, IIROrderL);
-//          for(int i = 0; i < I2S_DMA_BUF_LEN; i++)
-//          {
-//            filterOut1[i] *= IIRGainL;
-//          }
-
         }
         if(IIRTagL && FIRTagL) //Both
         {
@@ -172,12 +133,6 @@ interrupt void dmaIsr(void)
           copyShortBuf(filterOut1, filterIn1, I2S_DMA_BUF_LEN); //copy back
           // Filter Audio Channels, Fernando Algorithm
           filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn1, filterOut1, IIRcoeffsL, IIRdelayBufferL, IIROrderL);
-          //Filter Audio Channels, DSPlib algorithm
-          //iircas5((DATA*)filterIn1,(DATA*)IIRcoeffsL,(DATA*)filterOut1,(DATA*)IIRdelayBufferL,IIR_ORDER_MAX/2,I2S_DMA_BUF_LEN);
-//          for(int i = 0; i < I2S_DMA_BUF_LEN; i++)
-//          {
-//            filterOut1[i] *= IIRGainL;
-//          }
         }
         if(!FIRTagL && !IIRTagL) //No Filtering
         {
@@ -191,15 +146,8 @@ interrupt void dmaIsr(void)
         if(IIRTagR && !FIRTagR) //IIR Only
         {
           // Filter Right Audio Channel
-          //filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn2, filterOut2, IIRcoeffsR, IIRdelayBufferR, IIR_ORDER_MAX);
-          //iircas5((DATA*)filterIn2,(DATA*)IIRcoeffsR,(DATA*)filterOut2,(DATA*)IIRdelayBufferR,IIR_ORDER_MAX/2,I2S_DMA_BUF_LEN);
           filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn2, filterOut2, IIRcoeffsR, IIRdelayBufferR, IIROrderR);
-//          for(int i = 0; i < I2S_DMA_BUF_LEN; i++)
-//          {
-//            filterOut2[i] *= IIRGainR;
-//          }
           filterBufAvailable = 1;
-
         }
         if(IIRTagR && FIRTagR) //Both
         {
@@ -208,12 +156,6 @@ interrupt void dmaIsr(void)
           copyShortBuf(filterOut2, filterIn2, I2S_DMA_BUF_LEN);
           //Filter Audio Channels, Fernando Algorithm
           filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, filterIn2, filterOut2, IIRcoeffsR, IIRdelayBufferR, IIROrderR);
-          //Filter Audio Channels, DSPlib algorithm
-          //iircas5((DATA*)filterIn2,(DATA*)IIRcoeffsR,(DATA*)filterOut2,(DATA*)IIRdelayBufferR,IIR_ORDER_MAX/2,I2S_DMA_BUF_LEN);
-//          for(int i = 0; i < I2S_DMA_BUF_LEN; i++)
-//          {
-//            filterOut2[i] *= IIRGainR;
-//          }
         }
         if(!FIRTagR && !IIRTagR) //No Filtering
         {
