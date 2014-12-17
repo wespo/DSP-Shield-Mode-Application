@@ -9,16 +9,21 @@
 #include "mailbox.h"
 #include "SD.h"
 
-//FIR Filtering
-#include "filterFir.h"
-
 //IIR Filtering
 #include "filterIir.h"
+
+//FIR Filtering
+#include "filterFir.h"
 
 //general defines
 #define CHAN_LEFT 0
 #define CHAN_RIGHT 1
 #define CHAN_BOTH 2
+
+#define LOW_PASS 1
+#define HIGH_PASS 2
+#define BAND_PASS 3
+#define BAND_STOP 4
 
 //DDS include
 #include "ddsCode.h"
@@ -41,6 +46,10 @@ int filterOut1[I2S_DMA_BUF_LEN];
 
 // Buffer to hold the Output Samples of right channel, from the FIR filter
 int filterOut2[I2S_DMA_BUF_LEN];
+
+int filterInt1[I2S_DMA_BUF_LEN] = {0};
+int filterInt2[I2S_DMA_BUF_LEN] = {0};
+
 
 // Variable to indicate to the FIR Filtering section that the Input samples
 // are ready to be filtered
@@ -112,36 +121,32 @@ interrupt void dmaIsr(void)
     if (readyForFilter)
     {
         readyForFilter = 0;
-
+        
+        
+        //DDS Generation
         ddsGen(ddsConfigLeft, filterIn1, I2S_DMA_BUF_LEN);
         ddsGen(ddsConfigRight, filterIn2, I2S_DMA_BUF_LEN);
-        processIIR(lpfL);
-        processIIR(lpfR);
         
-        processIIR(hpfL);
-        processIIR(hpfR);
-        if(FIRTagL) //FIR Only
+        //IIR Filtering
+        IIRProcessChannel(iirL);
+        IIRProcessChannel(iirR);
+        
+        if(FIRTagL) //FIR Filtering
         {
           // Filter Left Audio Channel
-          filter_fir(hpfL.dst, FIRcoeffsL, filterOut1, delayBufferL, I2S_DMA_BUF_LEN, filterLen);
+          filter_fir(iirL.hpf.dst, FIRcoeffsL, iirL.hpf.dst, delayBufferL, I2S_DMA_BUF_LEN, filterLen);
         }
-        if(!FIRTagL) //No Filtering
-        {
-          copyShortBuf(hpfL.dst, filterOut1, I2S_DMA_BUF_LEN);
-        }
-        if(FIRTagR) //FIR Only
+        if(FIRTagR) //FIR Filtering
         {
           // Filter Right Audio Channel
-          filter_fir(hpfR.dst, FIRcoeffsR, filterOut2, delayBufferR, I2S_DMA_BUF_LEN, filterLen);
+          filter_fir(iirR.hpf.dst, FIRcoeffsR, iirR.hpf.dst, delayBufferR, I2S_DMA_BUF_LEN, filterLen);
         }
-        if(!FIRTagR) //No Filtering
-        {
-          copyShortBuf(hpfR.dst, filterOut2, I2S_DMA_BUF_LEN);
-        }
-        filterBufAvailable = 1;
-        updateSpectrumPointer(fftConfigLeft, filterIn1, filterOut1, (int **) AudioC.audioInLeft); //pick the left source buffer
+        filterBufAvailable = 1; //send output data on next interrupt
+        
+        //FFT handling
+        updateSpectrumPointer(fftConfigLeft, filterIn1, iirL.hpf.dst, (int **) AudioC.audioInLeft); //pick the left source buffer
         spectrum(fftConfigLeft); //generate FFT'd spectrum
-        updateSpectrumPointer(fftConfigRight, filterIn2, filterOut2, (int **) AudioC.audioInRight); //pick the right source buffer
+        updateSpectrumPointer(fftConfigRight, filterIn2, iirR.hpf.dst, (int **) AudioC.audioInRight); //pick the right source buffer
         spectrum(fftConfigRight); //generate FFT'd spectrum
     }
 }
@@ -163,7 +168,7 @@ void setup()
     disp.oledInit();
     disp.clear();
     disp.flip();    
-    disp.setline(1);
+    disp.setline(0);
     disp.print("Shield App");
     
     // Clear all the data buffers
@@ -196,15 +201,19 @@ void setup()
     //initialize DDS module for both left and right channels
     ddsConfigInit(ddsConfigLeft);
     ddsConfigInit(ddsConfigRight);
+    
+    //Initialize FFT for both channels
     fftConfigLeft = FFTInit();
     fftConfigRight = FFTInit();
     
-    //initialize 4 IIR blocks to point to the inputs.
-    lpfL = initIIR(filterIn1, filterIn1);
-    lpfR = initIIR(filterIn2, filterIn2);
-    hpfL = initIIR(filterIn1, filterIn1);
-    hpfR = initIIR(filterIn2, filterIn2);
-
+    //set up IIR channels
+    iirL = newIIRChannel();
+    iirR = newIIRChannel();
+   
+    //configure for no filter mode, indicate the three prebuilt buffers for each channel.
+    configureIIRChannel(iirL,NONE,filterIn1, filterOut1, filterInt1); 
+    configureIIRChannel(iirR,NONE,filterIn2, filterOut2, filterInt2);
+    
     //initialize mailbox per byte machine.
     arduinoMessageState = initMessageStateData(arduinoMessageState);
    
@@ -395,51 +404,88 @@ void readFilter()
        FIRTagR = 0;
      }
      break;
-   case 7:
+   case 7: //IIR Receive LPF/HPF only
      int order = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+     int dest = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
      newData = (int*) malloc(shieldMailbox.inboxSize/2);  
      //Working read via serial code
-     for(int i = 6; i < shieldMailbox.inboxSize; i = i + 2)
+     for(int i = 8; i < shieldMailbox.inboxSize; i = i + 2) //copy recieved coefficients to buffer.
      {
        newData[i/2 - 3] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
      }
-     if (channel == CHAN_LEFT) //channel 0 == left
+     
+     if(dest == LOW_PASS)
      {
-       IIROrderL = order;
-       memcpy(IIRcoeffsL, newData, order/2*COEFFS_PER_BIQUAD);
-       IIRTagL = 1;
+       
+       if(channel == CHAN_LEFT) //channel 0 == left
+       {
+         iirL.lpf.order = order;
+         memcpy(iirL.lpf.coeffs, newData, order/2*COEFFS_PER_BIQUAD); //copy into low pass coefficients
+         configureIIRChannel(iirL,LPF,filterIn1, filterOut1, filterInt1);  //configure blocks
+       }
+       else if (channel == CHAN_RIGHT) //channel 1 == right
+       {
+         iirR.lpf.order = order;
+         memcpy(iirR.lpf.coeffs, newData, order/2*COEFFS_PER_BIQUAD); //copy into low pass coefficients
+         configureIIRChannel(iirR,LPF,filterIn2, filterOut2, filterInt2); //configure blocks
+       }
+       else if (channel == CHAN_BOTH) //channel 2 == both
+       {
+         iirL.lpf.order = order;
+         memcpy(iirL.lpf.coeffs, newData, order/2*COEFFS_PER_BIQUAD); //copy into low pass coefficients
+         
+         iirR.lpf.order = order;
+         memcpy(iirR.lpf.coeffs, newData, order/2*COEFFS_PER_BIQUAD); //copy into low pass coefficients
+         
+         configureIIRChannel(iirL,LPF,filterIn1, filterOut1, filterInt1); //configure blocks
+         configureIIRChannel(iirR,LPF,filterIn2, filterOut2, filterInt2);
+       }
+       
      }
-     else if (channel == CHAN_RIGHT) //channel 1 == right
+     else if(dest == HIGH_PASS)
      {
-       IIROrderR = order;
-       memcpy(IIRcoeffsR, newData, order/2*COEFFS_PER_BIQUAD);
-       IIRTagR = 1;
-     }
-     else if (channel == CHAN_BOTH) //channel 2 == both
-     {
-       IIROrderL = order;
-       IIROrderR = order;
-       memcpy(IIRcoeffsL, newData, order/2*COEFFS_PER_BIQUAD);
-       memcpy(IIRcoeffsR, newData, order/2*COEFFS_PER_BIQUAD);       
-       IIRTagL = 1;
-       IIRTagR = 1;
+       
+       if(channel == CHAN_LEFT) //channel 0 == left
+       {
+         iirL.lpf.order = order;
+         memcpy(iirL.lpf.coeffs, newData, order/2*COEFFS_PER_BIQUAD); //copy into low pass coefficients
+         configureIIRChannel(iirL,HPF,filterIn1, filterOut1, filterInt1);  //configure blocks
+       }
+       else if (channel == CHAN_RIGHT) //channel 1 == right
+       {
+         iirR.lpf.order = order;
+         memcpy(iirR.lpf.coeffs, newData, order/2*COEFFS_PER_BIQUAD); //copy into low pass coefficients
+         configureIIRChannel(iirR,HPF,filterIn2, filterOut2, filterInt2); //configure blocks
+       }
+       else if (channel == CHAN_BOTH) //channel 2 == both
+       {
+         iirL.lpf.order = order;
+         memcpy(iirL.lpf.coeffs, newData, order/2*COEFFS_PER_BIQUAD); //copy into low pass coefficients
+         
+         iirR.lpf.order = order;
+         memcpy(iirR.lpf.coeffs, newData, order/2*COEFFS_PER_BIQUAD); //copy into low pass coefficients
+         
+         configureIIRChannel(iirL,HPF,filterIn1, filterOut1, filterInt1); //configure blocks
+         configureIIRChannel(iirR,HPF,filterIn2, filterOut2, filterInt2);
+       }
+       
      }
      free(newData);
      break;
    case 8: //IIR Load. Next byte is Type (butter, bessel, etc) then following byte is Pass (high low etc))
-      //currently this is a do-nothing function.
-     IIRTagL = 1;
-     IIRTagR = 1;
+     
+   
+   
      break;   
    case 9: //IIR toggle
-      if(IIRTagL == 0)
-       IIRTagL = 1;
+      if(iirL.lpf.enabled == 0)
+       iirL.lpf.enabled = 1;
      else
-       IIRTagL = 0;    
-      if(IIRTagL == 0)
-       IIRTagR = 1;
+       iirL.lpf.enabled = 0;    
+      if(iirR.lpf.enabled == 0)
+       iirR.lpf.enabled = 1;
      else
-       IIRTagR = 0;    
+       iirR.lpf.enabled = 0;    
      break;
    case 10: //initialize DDS
      //parse out two floats, frequency and gain from mailbox.
@@ -580,7 +626,73 @@ void readFilter()
    case 16: //diable audio codec input
      inputCodec = 0;
      break;
-   
+   case 17: //OLED Display print
+     disp.clear();
+     disp.setline(1);
+     disp.print(shieldMailbox.inbox);
+     break;
+   case 18: //dual IIR filter transmission.
+     int order1 = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+     int order2 = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
+     int dest2 = (shieldMailbox.inbox[9]<<8) + shieldMailbox.inbox[8];
+     newData = (int*) malloc(shieldMailbox.inboxSize/2);  
+     //Working read via serial code
+     for(int i = 10; i < 2*order1*COEFFS_PER_BIQUAD; i = i + 2) //copy recieved coefficients to buffer.
+     {
+       newData[i/2 - 3] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
+     }
+      
+     
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       iirL.lpf.order = order1;
+       memcpy(iirL.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       iirR.lpf.order = order1;
+       memcpy(iirR.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       iirL.lpf.order = order1;
+       memcpy(iirL.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
+       
+       iirR.lpf.order = order1;
+       memcpy(iirR.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
+     }
+     
+     for(int i = 10+2*order1*COEFFS_PER_BIQUAD; i < shieldMailbox.inboxSize; i = i + 2) //copy recieved coefficients to buffer.
+     {
+       newData[i/2 - 3] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
+     }
+
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       iirL.hpf.order = order2;
+       memcpy(iirL.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
+       configureIIRChannel(iirL,dest,filterIn1, filterOut1, filterInt1); //configure blocks
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       iirR.hpf.order = order2;
+       memcpy(iirR.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
+       configureIIRChannel(iirR,dest,filterIn2, filterOut2, filterInt2); //configure blocks
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       iirL.hpf.order = order2;
+       memcpy(iirL.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
+       
+       iirR.hpf.order = order2;
+       memcpy(iirR.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
+
+       configureIIRChannel(iirL,dest,filterIn1, filterOut1, filterInt1); //configure blocks
+       configureIIRChannel(iirR,dest,filterIn2, filterOut2, filterInt2);
+
+     }
+     free(newData);
+     break;
    }
   //friendly messaged recieve LED toggle.
   if(ledBlink)
