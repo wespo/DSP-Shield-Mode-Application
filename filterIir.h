@@ -38,19 +38,32 @@ struct iirChannel {
 };
 
 iirConfig initIIR();
-iirConfig initIIR(int *src, int *dst);
-iirConfig configIIR(int *src, int *dst);
+iirConfig initIIR(long* buffer, int *coeff);
 
 void loadfilterIIR(char *ftype, char *fresponse, char *fpass, int Hz, int *target, int order); //loads an IIR filter into a buffer (target) from disk.
 void recvfilterIIR(iirConfig &config, int order, int *coeffs); //loads an IIR filter into a buffer (config) from disk.
 
 void IIRsumChannels(iirConfig &one, iirConfig &two, int len); //sums the output buffers of two iirConfigs, divided by two to prevent overflos
 void IIRProcessChannel(iirChannel &channel);
-iirChannel newIIRChannel();
+iirChannel newIIRChannel(long* bufferL, long* bufferH, int* coeffL, int* coeffH);
 void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* bufferout, int* bufferint);
 
 void processIIR(iirConfig &config);
 
 extern iirChannel iirL, iirR;
 
+
+//extern int* IIRcoeffsL_L, IIRcoeffsR_L, IIRcoeffsL_H, IIRcoeffsR_H;
+//extern long* IIRdelayBufferL_L, IIRdelayBufferR_L, IIRdelayBufferL_H, IIRdelayBufferR_H;
+extern int IIRcoeffsL_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
+extern long IIRdelayBufferL_L[IIR_DELAY_BUF_SIZE];
+
+extern int IIRcoeffsR_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
+extern long IIRdelayBufferR_L[IIR_DELAY_BUF_SIZE];
+
+extern int IIRcoeffsL_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
+extern long IIRdelayBufferL_H[IIR_DELAY_BUF_SIZE];
+
+extern int IIRcoeffsR_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
+extern long IIRdelayBufferR_H[IIR_DELAY_BUF_SIZE];
 #endif

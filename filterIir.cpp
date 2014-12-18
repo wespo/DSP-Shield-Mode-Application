@@ -61,13 +61,13 @@ void loadfilterIIR(char* ftype, char *fresponse, char *fpass, int Hz, int* targe
    #endif
 }
 
-iirConfig initIIR(int *src, int *dst)
+iirConfig initIIR(long* buffer, int *coeff)
 {
   iirConfig config;
-  config.src = src;
-  config.dst = dst;
-  config.coeffs = 0;
-  config.delayBuf = 0;
+  config.src = 0;
+  config.dst = 0;
+  config.coeffs = coeff;
+  config.delayBuf = buffer;
   config.order = 0;
   config.enabled = 0;
   return config;
@@ -82,16 +82,16 @@ void processIIR(iirConfig &config)
 {
   if(config.enabled)
   {
-    filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, config.src, config.dst, config.coeffs, config.delayBuf, config.order);  
+    filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, config.src, config.coeffs, config.delayBuf, config.order);  //filter in place src = dst
   }
   
 }
-iirChannel newIIRChannel()
+iirChannel newIIRChannel(long* bufferL, long* bufferH, int* coeffL, int* coeffH)
 {
     iirChannel newChannel;
     //initialize 4 IIR blocks to point to the inputs.
-    newChannel.lpf = initIIR();
-    newChannel.hpf = initIIR();
+    newChannel.lpf = initIIR(bufferL, coeffL);
+    newChannel.hpf = initIIR(bufferH, coeffH);
     newChannel.mode = 0;
     return newChannel;
 }
@@ -99,15 +99,16 @@ iirChannel newIIRChannel()
 void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* bufferout, int* bufferint)
 //the HPF destination buffer should always contain the final result of all filter operations.
 {
+  channel.mode = mode;
   if(mode == LPF)
   {
     //low pass filter, configured such that the lpf directly goes 
     //in->[lpf]->out
     channel.lpf.src = bufferin;
-    channel.lpf.dst = bufferout;
+    channel.lpf.dst = bufferin;
     
     channel.hpf.src = bufferin;
-    channel.hpf.dst = bufferout;
+    channel.hpf.dst = bufferin;
     
     channel.lpf.enabled = 1;
     channel.hpf.enabled = 0;
@@ -117,10 +118,10 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
     //high pass filter, configured such that the hpf directly goes 
     //in->[hpf]->out
     channel.lpf.src = bufferin;
-    channel.lpf.dst = bufferout;
+    channel.lpf.dst = bufferin;
     
     channel.hpf.src = bufferin;
-    channel.hpf.dst = bufferout;
+    channel.hpf.dst = bufferin;
     
     channel.lpf.enabled = 0;
     channel.hpf.enabled = 1;    
@@ -130,10 +131,10 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
     //band pass filter, configured such that the filters are cascaded. 
     //in->[lpf]->intermediate->[hpf]->out
     channel.lpf.src = bufferin;
-    channel.lpf.dst = bufferint;
+    channel.lpf.dst = bufferin;
     
-    channel.hpf.src = bufferint;
-    channel.hpf.dst = bufferout;
+    channel.hpf.src = bufferin;
+    channel.hpf.dst = bufferin;
     
     channel.lpf.enabled = 1;
     channel.hpf.enabled = 1;
@@ -144,21 +145,21 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
     //in->[lpf]->intermediate, in->[hpf]->out, (out + intermediate) / 2 -> out 
     //(handled by the IIRProcessChannel function)
     channel.lpf.src = bufferin;
-    channel.lpf.dst = bufferint;
+    channel.lpf.dst = bufferin;
     
     channel.hpf.src = bufferin;
-    channel.hpf.dst = bufferout;
+    channel.hpf.dst = bufferin;
     
     channel.lpf.enabled = 1;
     channel.hpf.enabled = 1;
   }
   else //no filters enabled, point the output to the input, so that the fir filter routine copies the data out.
   {
-    channel.lpf.src = bufferout;
-    channel.lpf.dst = bufferout;
+    channel.lpf.src = bufferin;
+    channel.lpf.dst = bufferin;
     
-    channel.hpf.src = bufferout;
-    channel.hpf.dst = bufferout;
+    channel.hpf.src = bufferin;
+    channel.hpf.dst = bufferin;
     
     channel.lpf.enabled = 0;
     channel.hpf.enabled = 0;
@@ -184,7 +185,7 @@ void IIRProcessChannel(iirChannel &channel)
   else if (channel.mode == BPF) //band pass
   {
     processIIR(channel.lpf);
-    processIIR(channel.hpf);
+    processIIR(channel.hpf);    
   }
   else if(channel.mode == BSF) //band stop
   {

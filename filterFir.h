@@ -3,6 +3,17 @@
 #define FILTER_LENGTH_DEFAULT (201)
 #define FILTER_LENGTH_MAX (511)
 #define FILE_CHUNK (100)
+
+//general defines
+#define CHAN_LEFT 0
+#define CHAN_RIGHT 1
+#define CHAN_BOTH 2
+
+#define LOW_PASS 1
+#define HIGH_PASS 2
+#define BAND_PASS 3
+#define BAND_STOP 4
+
 unsigned int filterLen = FILTER_LENGTH_DEFAULT;
 //fir buffers
 volatile int FIRTagL = 0;
@@ -99,3 +110,19 @@ void loadfilter(char* ftype, char *fpass, int Hz, int* target, int targetLength)
      }
 }
 
+void firDisable(int channel)
+{
+       if(channel == CHAN_LEFT)
+     {
+       FIRTagL = 0;
+     }
+     else if(channel == CHAN_RIGHT)
+     {
+       FIRTagR = 0;       
+     }
+     else if(channel == CHAN_BOTH)
+     {
+       FIRTagL = 0;
+       FIRTagR = 0;
+     }
+}
