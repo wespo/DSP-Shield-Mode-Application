@@ -8,7 +8,7 @@ float fs = 44100;
 int numBits = 32;
 
 extern interrupt void dmaIsr(void);
-
+ddsConfig ddsConfigLeft, ddsConfigRight;
 void ddsGen(ddsConfig &config, int buffer[], int frameSize)
 {
   if(config.enable == 1)
@@ -233,3 +233,84 @@ ddsConfig ddsInit(int command, float fStart, float fEnd, float gain, int chirpLo
      }
     return newConfig;
 }
+
+void ddsChirpStart(int channel, int command)
+{
+   float fDDSEnd;
+   bool switch1;
+   ddsConfig newConfig;
+   float fDDS, gain;
+   //parse out two floats, frequency and gain from mailbox.
+   long recon = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
+   recon <<= 16;
+   recon += (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+   memcpy(&fDDS, &recon, sizeof(fDDS));
+   recon = (shieldMailbox.inbox[11]<<8) + shieldMailbox.inbox[10];
+   recon <<= 16;
+   recon += (shieldMailbox.inbox[9]<<8) + shieldMailbox.inbox[8];
+   memcpy(&fDDSEnd, &recon, sizeof(fDDSEnd));
+   recon = (shieldMailbox.inbox[15]<<8) + shieldMailbox.inbox[14];
+   recon <<= 16;
+   recon += (shieldMailbox.inbox[13]<<8) + shieldMailbox.inbox[12];
+   memcpy(&gain, &recon, sizeof(gain));     
+   int duration = (shieldMailbox.inbox[17]<<8) + shieldMailbox.inbox[16];
+   int chirpLoop = (shieldMailbox.inbox[19]<<8) + shieldMailbox.inbox[18];
+   int sumMode = (shieldMailbox.inbox[21]<<8) + shieldMailbox.inbox[20];
+   int type = (shieldMailbox.inbox[23]<<8) + shieldMailbox.inbox[22];
+   switch1 = (shieldMailbox.inbox[25]<<8) + shieldMailbox.inbox[24];
+     //store the new configuration in selected channel(s)
+     newConfig = ddsInit(command, fDDS, fDDSEnd, gain, chirpLoop, duration, sumMode, type);
+     loadWave(newConfig.wavType, channel, switch1); //fills phase to amplitude buffer.
+     if(channel == CHAN_LEFT)
+     {
+      ddsConfigLeft = newConfig;
+     }
+     else if(channel == CHAN_RIGHT)
+     {
+      newConfig.phaseToAmplitude = phase_to_amplitude_r;
+      ddsConfigRight = newConfig;
+     }
+     else if(channel == CHAN_BOTH)
+     {
+      ddsConfigLeft = newConfig;
+      newConfig.phaseToAmplitude = phase_to_amplitude_r;
+      memcpy(phase_to_amplitude_r, phase_to_amplitude_l, DDS_LENGTH); //if both channels, we have to copy the buffer over.
+      ddsConfigRight = newConfig;
+     }
+}
+
+void ddsToneStart(int channel, int command)
+{
+  //parse out two floats, frequency and gain from mailbox.
+   float fDDS, gain;
+   long recon = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
+   recon <<= 16;
+   recon += (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+   memcpy(&fDDS, &recon, sizeof(fDDS));
+   recon = (shieldMailbox.inbox[11]<<8) + shieldMailbox.inbox[10];
+   recon <<= 16;
+   recon += (shieldMailbox.inbox[9]<<8) + shieldMailbox.inbox[8];
+   memcpy(&gain, &recon, sizeof(gain));
+   int sumMode = (shieldMailbox.inbox[13]<<8) + shieldMailbox.inbox[12];
+   int type = (shieldMailbox.inbox[15]<<8) + shieldMailbox.inbox[14];
+   int switch1 = (shieldMailbox.inbox[17]<<8) + shieldMailbox.inbox[16];
+   ddsConfig newConfig = ddsInit(command, fDDS, fDDS, gain, 0, 0, sumMode, type); //ddsInit builds a configuration
+   loadWave(newConfig.wavType, channel, switch1); //fills phase to amplitude buffer.
+   if(channel == CHAN_LEFT)
+   {
+    ddsConfigLeft = newConfig;
+   }
+   else if(channel == CHAN_RIGHT)
+   {
+    newConfig.phaseToAmplitude = phase_to_amplitude_r;
+    ddsConfigRight = newConfig;
+   }
+   else if(channel == CHAN_BOTH)
+   {
+    ddsConfigLeft = newConfig;
+    newConfig.phaseToAmplitude = phase_to_amplitude_r;
+    memcpy(phase_to_amplitude_r, phase_to_amplitude_l, DDS_LENGTH); //if both channels, we have to copy the buffer over.
+    ddsConfigRight = newConfig;
+   }
+}
+  

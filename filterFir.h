@@ -1,3 +1,5 @@
+#include "mailbox.h"
+
 // Length of the Coefficient Vector
 //#define AUDIO_INTERRUPTION 1 //causes audio to be interrupted on SD card hit.
 #define FILTER_LENGTH_DEFAULT (201)
@@ -124,5 +126,146 @@ void firDisable(int channel)
      {
        FIRTagL = 0;
        FIRTagR = 0;
+     }
+}
+
+void FIRRecieve(int channel)
+{
+     int* newData = (int*) malloc(shieldMailbox.inboxSize/2);  
+     //Working read via serial code
+     for(int i = 4; i < shieldMailbox.inboxSize; i = i + 2)
+     {
+       newData[i/2 - 2] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
+     }     
+
+     int filterLenNew = shieldMailbox.inboxSize/2 - 2; //command and channel take up 4 words the rest are taps.
+     if(filterLenNew > 511) //max out at 511 taps, the absolute most we dare handle.
+     {
+       filterLenNew = 511;
+     }
+
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       memcpy(FIRcoeffsL, newData, filterLen);
+       FIRTagL = 1;
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       memcpy(FIRcoeffsR, newData, filterLen);
+       FIRTagR = 1;
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       memcpy(FIRcoeffsL, newData, filterLen);
+       memcpy(FIRcoeffsR, newData, filterLen);       
+       FIRTagL = 1;
+       FIRTagR = 1;
+     }
+
+     free(newData);
+}
+void FIRLoad(int channel, int command)
+{
+     //get Fc
+     char fType[4] = "fir";
+     char fPass[4] = "lpf";  
+     int fCutoff, fQuality, sumMode, type;
+     
+     if(command == 2 || command == 3)
+     {
+     
+       fCutoff = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+  
+       fQuality = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6]; //quality indicator for filter load.
+       
+       //note, we do this check for sanitization.
+       if((fQuality == 41) || (fQuality == 101) || (fQuality == 201) || (fQuality == 301) || (fQuality == 401) || (fQuality == 511)) //only pass qualities that are on the SD card
+       {
+          filterLen = fQuality;
+       }
+       else
+       {
+          filterLen = 201; //default to medium quality filter
+       }
+  
+       if(command == 3) //hpf
+       {
+         fPass[0] = 'h';  // HIGH_PASS, not LOW_PASS
+       }
+       //High or low pass
+       int* newData = (int*) malloc(filterLen);  
+       loadfilter(fType, fPass, fCutoff, newData, filterLen);
+       if (channel == CHAN_LEFT) //channel 0 == left
+       {
+         memcpy(FIRcoeffsL, newData, filterLen);
+         FIRTagL = 1;
+       }
+       else if (channel == CHAN_RIGHT) //channel 1 == right
+       {
+         memcpy(FIRcoeffsR, newData, filterLen);
+         FIRTagR = 1;       
+       }
+       else if (channel == CHAN_BOTH) //channel 2 == both
+       {
+         memcpy(FIRcoeffsL, newData, filterLen);
+         memcpy(FIRcoeffsR, newData, filterLen);       
+         FIRTagL = 1;
+         FIRTagR = 1;       
+       }
+     }
+     else if(command == 4 || command == 5)
+     {
+       filterLen = FILTER_LENGTH_DEFAULT;
+       //BAND FILTER
+       int fCutoff2 = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4]; //lpf
+       int fCutoff1 = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6]; //hpf
+  
+       fQuality = (shieldMailbox.inbox[9]<<8) + shieldMailbox.inbox[8]; //quality indicator for filter load.
+       
+       //note, we do this check for sanitization.
+       if((fQuality == 41) || (fQuality == 101) || (fQuality == 201) || (fQuality == 301) || (fQuality == 401) || (fQuality == 511)) //only pass qualities that are on the SD card
+       {
+          filterLen = fQuality;
+       }
+       else
+       {
+          filterLen = 201; //default to medium quality filter
+       }
+  
+       int coeffs1[2*FILTER_LENGTH_MAX-1] = {0};
+       int coeffs2[FILTER_LENGTH_MAX] = {0};   
+  
+  
+       loadfilter(fType, fPass, fCutoff1, coeffs1 + filterLen/2, filterLen);
+       fPass[0] = 'h'; // HIGH_PASS, not LOW_PASS
+       loadfilter(fType, fPass, fCutoff2, coeffs2, filterLen);
+  
+       //for band, we cascade the filters via convolution.
+       convol((DATA*)coeffs1, (DATA*)coeffs2, (DATA*)coeffs1, filterLen, filterLen);
+       if(command == 5) //if notch, flip the band filter.
+       {
+         for(int i = 0; i < filterLen; i++)
+         {
+           coeffs1[i] *= -1;// * (coeffs2[i] + coeffs1[i]);
+         }
+         coeffs1[filterLen/2]+=32767;
+       }
+       if (channel == CHAN_LEFT) //channel 0 == left
+       {
+         memcpy(FIRcoeffsL, coeffs1, filterLen);
+         FIRTagL = 1;
+       }
+       else if (channel == CHAN_RIGHT) //channel 1 == right
+       {
+         memcpy(FIRcoeffsR, coeffs1, filterLen);
+         FIRTagR = 1;
+       }
+       else if (channel == CHAN_BOTH) //channel 2 == both
+       {
+         memcpy(FIRcoeffsL, coeffs1, filterLen);
+         memcpy(FIRcoeffsR, coeffs1, filterLen);       
+         FIRTagL = 1;
+         FIRTagR = 1;
+       }
      }
 }

@@ -14,25 +14,17 @@ inline void setXF(bool togg)
 //iirConfig lpfL, lpfR, hpfL, hpfR;
 iirChannel iirL, iirR;
 
-int IIRcoeffsL_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {
-  0};
-long IIRdelayBufferL_L[IIR_DELAY_BUF_SIZE] = {
-  0};
+int IIRcoeffsL_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
+long IIRdelayBufferL_L[IIR_DELAY_BUF_SIZE] = {0};
 
-int IIRcoeffsR_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {
-  0};
-long IIRdelayBufferR_L[IIR_DELAY_BUF_SIZE] = {
-  0};
+int IIRcoeffsR_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
+long IIRdelayBufferR_L[IIR_DELAY_BUF_SIZE] = {0};
 
-int IIRcoeffsL_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {
-  0};
-long IIRdelayBufferL_H[IIR_DELAY_BUF_SIZE] = {
-  0};
+int IIRcoeffsL_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
+long IIRdelayBufferL_H[IIR_DELAY_BUF_SIZE] = {0};
 
-int IIRcoeffsR_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {
-  0};
-long IIRdelayBufferR_H[IIR_DELAY_BUF_SIZE] = {
-  0};
+int IIRcoeffsR_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
+long IIRdelayBufferR_H[IIR_DELAY_BUF_SIZE] = {0};
 
 void loadfilterIIR(char* ftype, char *fresponse, char *fpass, int Hz, int* target, int order)
 {
@@ -90,14 +82,14 @@ iirConfig initIIR(long* buffer, int *coeff)
 }
 iirConfig initIIR()
 {
-  return(initIIR(0,0));
+  return(initIIR(0,0)); //don't initialize coeffs and delay buffer.
 }
 
 inline void processIIR(iirConfig &config)
 {
   if(config.enabled)
   {
-    if(config.src == config.dst)
+    if(config.src == config.dst) //process in place if possible to save cycles.
     {
       filter_iirArbitraryOrder(I2S_DMA_BUF_LEN, config.src, config.coeffs, config.delayBuf, config.order);  //filter in place src = dst
     }
@@ -108,7 +100,7 @@ inline void processIIR(iirConfig &config)
   }
 
 }
-iirChannel newIIRChannel(long* bufferL, long* bufferH, int* coeffL, int* coeffH)
+iirChannel newIIRChannel(long* bufferL, long* bufferH, int* coeffL, int* coeffH) //initialize IIR channel
 {
   iirChannel newChannel;
   //initialize 4 IIR blocks to point to the inputs.
@@ -119,10 +111,10 @@ iirChannel newIIRChannel(long* bufferL, long* bufferH, int* coeffL, int* coeffH)
 }
 
 void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* bufferout, int* bufferint)
-//the HPF destination buffer should always contain the final result of all filter operations.
+//the HIGH_PASS destination buffer should always contain the final result of all filter operations.
 {
   channel.mode = mode;
-  if(mode == LPF)
+  if(mode == LOW_PASS)
   {
     //low pass filter, configured such that the lpf directly goes 
     //in->[lpf]->out
@@ -135,7 +127,7 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
     channel.lpf.enabled = 1;
     channel.hpf.enabled = 0;
   }
-  else if(mode == HPF)
+  else if(mode == HIGH_PASS)
   {
     //high pass filter, configured such that the hpf directly goes 
     //in->[hpf]->out
@@ -148,7 +140,7 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
     channel.lpf.enabled = 0;
     channel.hpf.enabled = 1;    
   }
-  else if(mode == BPF)
+  else if(mode == BAND_PASS)
   {
     //band pass filter, configured such that the filters are cascaded. 
     //in->[lpf]->intermediate->[hpf]->out
@@ -161,7 +153,7 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
     channel.lpf.enabled = 1;
     channel.hpf.enabled = 1;
   }
-  else if(mode == BSF)
+  else if(mode == BAND_STOP)
   {
     //band stop filter, configured such that the filters are paralleled. 
     //in->[lpf]->intermediate, in->[hpf]->out, (out + intermediate) / 2 -> out 
@@ -196,20 +188,20 @@ void deconfigureIIRChannel(iirChannel)
 
 void IIRProcessChannel(iirChannel &channel)
 {
-  if (channel.mode == LPF) //low pass
+  if (channel.mode == LOW_PASS) //low pass
   {
     processIIR(channel.lpf);
   }
-  else if (channel.mode == HPF) //high pass
+  else if (channel.mode == HIGH_PASS) //high pass
   {
     processIIR(channel.hpf);
   }
-  else if (channel.mode == BPF) //band pass
+  else if (channel.mode == BAND_PASS) //band pass
   {
     processIIR(channel.lpf);
     processIIR(channel.hpf);    
   }
-  else if(channel.mode == BSF) //band stop
+  else if(channel.mode == BAND_STOP) //band stop
   {
     processIIR(channel.lpf);
     processIIR(channel.hpf);

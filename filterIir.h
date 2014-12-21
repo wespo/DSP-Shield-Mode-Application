@@ -12,11 +12,16 @@
 #define COEFFS_PER_BIQUAD (7)
 #define IIR_DELAY_BUF_SIZE   (200)//((IIR_ORDER_MAX/2)*(DELAY_COUNT))
 
-#define NONE 0 //no filtering
-#define LPF 1 //lowpass
-#define HPF 2 //highpass
-#define BPF 3 //bandpass
-#define BSF 4 //bandstop
+//general defines
+#define CHAN_LEFT 0
+#define CHAN_RIGHT 1
+#define CHAN_BOTH 2
+
+#define ALL_PASS 1
+#define LOW_PASS 1
+#define HIGH_PASS 2
+#define BAND_PASS 3
+#define BAND_STOP 4
 
 #define LEFT 0
 #define RIGHT 1
