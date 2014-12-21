@@ -48,6 +48,7 @@ ddsConfig ddsInit(int command, float fStart, float fEnd, float gain, int chirpLo
 
 void ddsChirpStart(int channel, int command);
 void ddsToneStart(int channel, int command);
+void ddsStop(int channel);
 
 extern int phase_to_amplitude_l[DDS_LENGTH];
 extern int phase_to_amplitude_r[DDS_LENGTH];

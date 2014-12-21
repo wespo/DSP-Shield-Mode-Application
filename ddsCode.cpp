@@ -313,4 +313,21 @@ void ddsToneStart(int channel, int command)
     ddsConfigRight = newConfig;
    }
 }
+
+void ddsStop(int channel)
+{
+   if(channel == CHAN_LEFT)
+   {
+     ddsConfigLeft.enable = 0;
+   }
+   else if(channel == CHAN_RIGHT)
+   {
+     ddsConfigRight.enable = 0;
+   }
+   else if(channel == CHAN_BOTH)
+   {
+     ddsConfigLeft.enable = 0;
+     ddsConfigRight.enable = 0;
+   }
+}
   

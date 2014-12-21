@@ -55,6 +55,9 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
 
 void processIIR(iirConfig &config);
 
+void IIRRecieve(int channel);
+void IIRRecieveDual(int channel);
+
 void printIIRData(iirChannel &channel);
 void printFilterData(iirConfig &filter);
 extern iirChannel iirL, iirR;
@@ -73,4 +76,5 @@ extern long IIRdelayBufferL_H[IIR_DELAY_BUF_SIZE];
 
 extern int IIRcoeffsR_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
 extern long IIRdelayBufferR_H[IIR_DELAY_BUF_SIZE];
+
 #endif
