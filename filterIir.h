@@ -10,7 +10,7 @@
 #define IIR_ORDER_MAX    (40)
 #define DELAY_COUNT      (5)
 #define COEFFS_PER_BIQUAD (7)
-#define IIR_DELAY_BUF_SIZE   ((IIR_ORDER_MAX/2)*(DELAY_COUNT))
+#define IIR_DELAY_BUF_SIZE   (200)//((IIR_ORDER_MAX/2)*(DELAY_COUNT))
 
 #define NONE 0 //no filtering
 #define LPF 1 //lowpass
@@ -50,6 +50,8 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
 
 void processIIR(iirConfig &config);
 
+void printIIRData(iirChannel &channel);
+void printFilterData(iirConfig &filter);
 extern iirChannel iirL, iirR;
 
 

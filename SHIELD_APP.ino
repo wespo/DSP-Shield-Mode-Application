@@ -263,81 +263,11 @@ void readFilter()
    //parse the command, based on which command we recieved.
    switch(command) {
    case 1: //fir load direct, syntax is: <int command><FILTER_LENGTH x int coefficients>
-     newData = (int*) malloc(shieldMailbox.inboxSize/2);  
-     //Working read via serial code
-     for(int i = 4; i < shieldMailbox.inboxSize; i = i + 2)
-     {
-       newData[i/2 - 2] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
-     }     
-
-     int filterLenNew = shieldMailbox.inboxSize/2 - 2; //command and channel take up 4 words the rest are taps.
-     if(filterLenNew > 511) //max out at 511 taps, the absolute most we dare handle.
-     {
-       filterLenNew = 511;
-     }
-
-     if (channel == CHAN_LEFT) //channel 0 == left
-     {
-       memcpy(FIRcoeffsL, newData, filterLen);
-       FIRTagL = 1;
-     }
-     else if (channel == CHAN_RIGHT) //channel 1 == right
-     {
-       memcpy(FIRcoeffsR, newData, filterLen);
-       FIRTagR = 1;
-     }
-     else if (channel == CHAN_BOTH) //channel 2 == both
-     {
-       memcpy(FIRcoeffsL, newData, filterLen);
-       memcpy(FIRcoeffsR, newData, filterLen);       
-       FIRTagL = 1;
-       FIRTagR = 1;
-     }
-
-     free(newData);
+     FIRRecieve(channel);
      break;
    case 2: //2 = FIR LPF, 3 = FIR HPF, syntax is: <int command><int cutoff>
    case 3: 
-     //get Fc
-     fCutoff = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
-
-     fQuality = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6]; //quality indicator for filter load.
-     
-     //note, we do this check for sanitization.
-     if((fQuality == 41) || (fQuality == 101) || (fQuality == 201) || (fQuality == 301) || (fQuality == 401) || (fQuality == 511)) //only pass qualities that are on the SD card
-     {
-        filterLen = fQuality;
-     }
-     else
-     {
-        filterLen = 201; //default to medium quality filter
-     }
-
-     if(command == 3) //hpf
-     {
-       fPass[0] = 'h';  // HPF, not LPF
-     }
-     //High or low pass
-     newData = (int*) malloc(filterLen);  
-     loadfilter(fType, fPass, fCutoff, newData, filterLen);
-     if (channel == CHAN_LEFT) //channel 0 == left
-     {
-       memcpy(FIRcoeffsL, newData, filterLen);
-       FIRTagL = 1;
-     }
-     else if (channel == CHAN_RIGHT) //channel 1 == right
-     {
-       memcpy(FIRcoeffsR, newData, filterLen);
-       FIRTagR = 1;       
-     }
-     else if (channel == CHAN_BOTH) //channel 2 == both
-     {
-       memcpy(FIRcoeffsL, newData, filterLen);
-       memcpy(FIRcoeffsR, newData, filterLen);       
-       FIRTagL = 1;
-       FIRTagR = 1;       
-     }
-     free(newData);
+     FIRLoad(channel, command);
      break;
    case 4: //4 = FIR BANDPASS, 5 = FIR NOTCH, syntax is: <int command><int lower bound><int upper bound>
    case 5:
@@ -398,74 +328,7 @@ void readFilter()
      firDisable(channel);
      break;
    case 7: //IIR Receive LPF/HPF only
-     int order = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
-     int dest = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
-     newData = (int*) malloc(shieldMailbox.inboxSize/2);  
-     //Working read via serial code
-     for(int i = 8; i < shieldMailbox.inboxSize; i = i + 2) //copy recieved coefficients to buffer.
-     {
-       newData[i/2 - 4] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
-     }
-     
-     if(dest == LOW_PASS)
-     {
-       int newDataLen = shieldMailbox.inboxSize/2 - 4;
-       //int newDataLen = order/2*COEFFS_PER_BIQUAD;
-       if(channel == CHAN_LEFT) //channel 0 == left
-       {
-         iirL.lpf.order = order;
-         memcpy(iirL.lpf.coeffs, newData, newDataLen); //copy into low pass coefficients
-         configureIIRChannel(iirL,LPF,filterIn1, filterOut1, filterInt1);  //configure blocks
-       }
-       else if (channel == CHAN_RIGHT) //channel 1 == right
-       {
-         iirR.lpf.order = order;
-         memcpy(iirR.lpf.coeffs, newData, newDataLen); //copy into low pass coefficients
-         configureIIRChannel(iirR,LPF,filterIn2, filterOut2, filterInt2); //configure blocks
-       }
-       else if (channel == CHAN_BOTH) //channel 2 == both
-       {
-         iirL.lpf.order = order;
-         memcpy(iirL.lpf.coeffs, newData, newDataLen); //copy into low pass coefficients
-         
-         iirR.lpf.order = order;
-         memcpy(iirR.lpf.coeffs, newData, newDataLen); //copy into low pass coefficients
-
-         configureIIRChannel(iirL,LPF,filterIn1, filterOut1, filterInt1); //configure blocks
-         configureIIRChannel(iirR,LPF,filterIn2, filterOut2, filterInt2);
-       }
-       
-     }
-     else if(dest == HIGH_PASS)
-     {
-       int newDataLen = shieldMailbox.inboxSize/2 - 4;
-       //int newDataLen = order/2*COEFFS_PER_BIQUAD;
-       if(channel == CHAN_LEFT) //channel 0 == left
-       {
-         iirL.hpf.order = order;
-         memcpy(iirL.hpf.coeffs, newData, newDataLen); //copy into low pass coefficients
-         configureIIRChannel(iirL,HPF,filterIn1, filterOut1, filterInt1);  //configure blocks
-       }
-       else if (channel == CHAN_RIGHT) //channel 1 == right
-       {
-         iirR.hpf.order = order;
-         memcpy(iirR.hpf.coeffs, newData, newDataLen); //copy into low pass coefficients
-         configureIIRChannel(iirR,HPF,filterIn2, filterOut2, filterInt2); //configure blocks
-       }
-       else if (channel == CHAN_BOTH) //channel 2 == both
-       {
-         iirL.hpf.order = order;
-         memcpy(iirL.hpf.coeffs, newData, newDataLen); //copy into low pass coefficients
-         
-         iirR.hpf.order = order;
-         memcpy(iirR.hpf.coeffs, newData, newDataLen); //copy into low pass coefficients
-
-         configureIIRChannel(iirL,HPF,filterIn1, filterOut1, filterInt1); //configure blocks
-         configureIIRChannel(iirR,HPF,filterIn2, filterOut2, filterInt2);
-       }
-       
-     }
-     free(newData);
+     IIRRecieve(channel);
      break;
    case 8: //IIR Load. Next byte is Type (butter, bessel, etc) then following byte is Pass (high low etc))
      
@@ -549,70 +412,7 @@ void readFilter()
      oledPrintMessage();
      break;
    case 18: //dual IIR filter transmission.
-          configureIIRChannel(iirL,BPF,filterIn1, filterOut1, filterInt1); //configure blocks
-       configureIIRChannel(iirR,BPF,filterIn2, filterOut2, filterInt2);
-     /*
-     int order1 = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
-     int order2 = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
-     int dest2 = (shieldMailbox.inbox[9]<<8) + shieldMailbox.inbox[8];
-     newData = (int*) malloc(shieldMailbox.inboxSize/2);  
-     //Working read via serial code
-     for(int i = 10; i < order1*COEFFS_PER_BIQUAD; i = i + 2) //copy recieved coefficients to buffer.
-     {
-       newData[i/2 - 5] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
-     }
-      
-     
-     if (channel == CHAN_LEFT) //channel 0 == left
-     {
-       iirL.lpf.order = order1;
-       memcpy(iirL.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
-     }
-     else if (channel == CHAN_RIGHT) //channel 1 == right
-     {
-       iirR.lpf.order = order1;
-       memcpy(iirR.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
-     }
-     else if (channel == CHAN_BOTH) //channel 2 == both
-     {
-       iirL.lpf.order = order1;
-       memcpy(iirL.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
-       
-       iirR.lpf.order = order1;
-       memcpy(iirR.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
-     }
-     
-     for(int i = 10+order1*COEFFS_PER_BIQUAD; i < shieldMailbox.inboxSize; i = i + 2) //copy recieved coefficients to buffer.
-     {
-       newData[i/2 - 5-order1/2*COEFFS_PER_BIQUAD] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
-     }
-
-     if (channel == CHAN_LEFT) //channel 0 == left
-     {
-       iirL.hpf.order = order2;
-       memcpy(iirL.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
-       configureIIRChannel(iirL,dest2,filterIn1, filterOut1, filterInt1); //configure blocks
-     }
-     else if (channel == CHAN_RIGHT) //channel 1 == right
-     {
-       iirR.hpf.order = order2;
-       memcpy(iirR.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
-       configureIIRChannel(iirR,dest2,filterIn2, filterOut2, filterInt2); //configure blocks
-     }
-     else if (channel == CHAN_BOTH) //channel 2 == both
-     {
-       iirL.hpf.order = order2;
-       memcpy(iirL.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
-       
-       iirR.hpf.order = order2;
-       memcpy(iirR.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
-
-       configureIIRChannel(iirL,dest2,filterIn1, filterOut1, filterInt1); //configure blocks
-       configureIIRChannel(iirR,dest2,filterIn2, filterOut2, filterInt2);
-
-     }
-     free(newData);
-     */
+     IIRRecieveDual(channel);
      break;
    }
   //friendly messaged recieve LED toggle.
@@ -734,4 +534,222 @@ void ddsChirpStart(int channel, int command)
       memcpy(phase_to_amplitude_r, phase_to_amplitude_l, DDS_LENGTH); //if both channels, we have to copy the buffer over.
       ddsConfigRight = newConfig;
      }
+}
+void FIRRecieve(int channel)
+{
+     int* newData = (int*) malloc(shieldMailbox.inboxSize/2);  
+     //Working read via serial code
+     for(int i = 4; i < shieldMailbox.inboxSize; i = i + 2)
+     {
+       newData[i/2 - 2] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
+     }     
+
+     int filterLenNew = shieldMailbox.inboxSize/2 - 2; //command and channel take up 4 words the rest are taps.
+     if(filterLenNew > 511) //max out at 511 taps, the absolute most we dare handle.
+     {
+       filterLenNew = 511;
+     }
+
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       memcpy(FIRcoeffsL, newData, filterLen);
+       FIRTagL = 1;
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       memcpy(FIRcoeffsR, newData, filterLen);
+       FIRTagR = 1;
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       memcpy(FIRcoeffsL, newData, filterLen);
+       memcpy(FIRcoeffsR, newData, filterLen);       
+       FIRTagL = 1;
+       FIRTagR = 1;
+     }
+
+     free(newData);
+}
+void FIRLoad(int channel, int command)
+{
+     //get Fc
+     char fType[4] = "fir";
+     char fPass[4] = "lpf";  
+     int fCutoff, fQuality, sumMode, type;
+     fCutoff = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+
+     fQuality = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6]; //quality indicator for filter load.
+     
+     //note, we do this check for sanitization.
+     if((fQuality == 41) || (fQuality == 101) || (fQuality == 201) || (fQuality == 301) || (fQuality == 401) || (fQuality == 511)) //only pass qualities that are on the SD card
+     {
+        filterLen = fQuality;
+     }
+     else
+     {
+        filterLen = 201; //default to medium quality filter
+     }
+
+     if(command == 3) //hpf
+     {
+       fPass[0] = 'h';  // HPF, not LPF
+     }
+     //High or low pass
+     int* newData = (int*) malloc(filterLen);  
+     loadfilter(fType, fPass, fCutoff, newData, filterLen);
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       memcpy(FIRcoeffsL, newData, filterLen);
+       FIRTagL = 1;
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       memcpy(FIRcoeffsR, newData, filterLen);
+       FIRTagR = 1;       
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       memcpy(FIRcoeffsL, newData, filterLen);
+       memcpy(FIRcoeffsR, newData, filterLen);       
+       FIRTagL = 1;
+       FIRTagR = 1;       
+     }
+     free(newData);
+}
+void IIRRecieve(int channel)
+{
+     int order = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+     int dest = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
+     int* newData = (int*) malloc(shieldMailbox.inboxSize/2);  
+     //Working read via serial code
+     for(int i = 8; i < shieldMailbox.inboxSize; i = i + 2) //copy recieved coefficients to buffer.
+     {
+       newData[i/2 - 4] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
+     }
+     
+     if(dest == LOW_PASS)
+     {
+       int newDataLen = shieldMailbox.inboxSize/2 - 4;
+       //int newDataLen = order/2*COEFFS_PER_BIQUAD;
+       if(channel == CHAN_LEFT) //channel 0 == left
+       {
+         iirL.lpf.order = order;
+         memcpy(iirL.lpf.coeffs, newData, newDataLen); //copy into low pass coefficients
+         configureIIRChannel(iirL,LPF,filterIn1, filterOut1, filterInt1);  //configure blocks
+       }
+       else if (channel == CHAN_RIGHT) //channel 1 == right
+       {
+         iirR.lpf.order = order;
+         memcpy(iirR.lpf.coeffs, newData, newDataLen); //copy into low pass coefficients
+         configureIIRChannel(iirR,LPF,filterIn2, filterOut2, filterInt2); //configure blocks
+       }
+       else if (channel == CHAN_BOTH) //channel 2 == both
+       {
+         iirL.lpf.order = order;
+         memcpy(iirL.lpf.coeffs, newData, newDataLen); //copy into low pass coefficients
+         
+         iirR.lpf.order = order;
+         memcpy(iirR.lpf.coeffs, newData, newDataLen); //copy into low pass coefficients
+
+         configureIIRChannel(iirL,LPF,filterIn1, filterOut1, filterInt1); //configure blocks
+         configureIIRChannel(iirR,LPF,filterIn2, filterOut2, filterInt2);
+       }
+       
+     }
+     else if(dest == HIGH_PASS)
+     {
+       int newDataLen = shieldMailbox.inboxSize/2 - 4;
+       //int newDataLen = order/2*COEFFS_PER_BIQUAD;
+       if(channel == CHAN_LEFT) //channel 0 == left
+       {
+         iirL.hpf.order = order;
+         memcpy(iirL.hpf.coeffs, newData, newDataLen); //copy into low pass coefficients
+         configureIIRChannel(iirL,HPF,filterIn1, filterOut1, filterInt1);  //configure blocks
+       }
+       else if (channel == CHAN_RIGHT) //channel 1 == right
+       {
+         iirR.hpf.order = order;
+         memcpy(iirR.hpf.coeffs, newData, newDataLen); //copy into low pass coefficients
+         configureIIRChannel(iirR,HPF,filterIn2, filterOut2, filterInt2); //configure blocks
+       }
+       else if (channel == CHAN_BOTH) //channel 2 == both
+       {
+         iirL.hpf.order = order;
+         memcpy(iirL.hpf.coeffs, newData, newDataLen); //copy into low pass coefficients
+         
+         iirR.hpf.order = order;
+         memcpy(iirR.hpf.coeffs, newData, newDataLen); //copy into low pass coefficients
+
+         configureIIRChannel(iirL,HPF,filterIn1, filterOut1, filterInt1); //configure blocks
+         configureIIRChannel(iirR,HPF,filterIn2, filterOut2, filterInt2);
+       }
+       
+     }
+     free(newData);
+}
+
+void IIRRecieveDual(int channel)
+{
+     int order1 = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+     int order2 = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
+     int filterType = (shieldMailbox.inbox[9]<<8) + shieldMailbox.inbox[8];
+     int* newData = (int*) malloc(shieldMailbox.inboxSize/2);  
+     //Working read via serial code
+     for(int i = 10; i < order1*COEFFS_PER_BIQUAD+10; i = i + 2) //copy recieved coefficients to buffer.
+     {
+       newData[i/2 - 5] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
+     }
+      
+     
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       iirL.lpf.order = order1;
+       memcpy(iirL.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       iirR.lpf.order = order1;
+       memcpy(iirR.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       iirL.lpf.order = order1;
+       memcpy(iirL.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
+       
+       iirR.lpf.order = order1;
+       memcpy(iirR.lpf.coeffs, newData, order1/2*COEFFS_PER_BIQUAD);
+     }
+     
+     for(int i = 10+order1*COEFFS_PER_BIQUAD; i < shieldMailbox.inboxSize; i = i + 2) //copy recieved coefficients to buffer.
+     {
+       newData[i/2 - 5 - order1/2*COEFFS_PER_BIQUAD] = ((shieldMailbox.inbox[i+1]<<8) + shieldMailbox.inbox[i]);
+     }
+
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       iirL.hpf.order = order2;
+       memcpy(iirL.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
+       configureIIRChannel(iirL,filterType,filterIn1, filterOut1, filterInt1); //configure blocks
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       iirR.hpf.order = order2;
+       memcpy(iirR.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
+       configureIIRChannel(iirR,filterType,filterIn2, filterOut2, filterInt2); //configure blocks
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       iirL.hpf.order = order2;
+       memcpy(iirL.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
+       
+       iirR.hpf.order = order2;
+       memcpy(iirR.hpf.coeffs, newData, order2/2*COEFFS_PER_BIQUAD);
+
+       configureIIRChannel(iirL,filterType,filterIn1, filterOut1, filterInt1); //configure blocks
+       configureIIRChannel(iirR,filterType,filterIn2, filterOut2, filterInt2);
+
+     }
+     printIIRData(iirL);
+     printIIRData(iirR);
+     free(newData);
 }
