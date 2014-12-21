@@ -42,29 +42,30 @@ struct iirChannel {
   int mode; //lpf, hpf, bpf, bsf 
 };
 
-iirConfig initIIR();
-iirConfig initIIR(long* buffer, int *coeff);
+iirConfig initIIR(); //initialize channel without configuring filter buffers
+iirConfig initIIR(long* buffer, int *coeff); //initialize channel
 
 void loadfilterIIR(char *ftype, char *fresponse, char *fpass, int Hz, int *target, int order); //loads an IIR filter into a buffer (target) from disk.
 void recvfilterIIR(iirConfig &config, int order, int *coeffs); //loads an IIR filter into a buffer (config) from disk.
 
 void IIRsumChannels(iirConfig &one, iirConfig &two, int len); //sums the output buffers of two iirConfigs, divided by two to prevent overflos
-void IIRProcessChannel(iirChannel &channel);
-iirChannel newIIRChannel(long* bufferL, long* bufferH, int* coeffL, int* coeffH);
-void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* bufferout, int* bufferint);
+void IIRProcessChannel(iirChannel &channel); //process both iir filters in the channel.
+iirChannel newIIRChannel(long* bufferL, long* bufferH, int* coeffL, int* coeffH); //initailize the channel.
+void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* bufferout, int* bufferint); //configure the channel's input and output buffers.
+void deconfigureIIRChannel(iirChannel &channel); //disable channel, point everything to zero (watch out).
 
-void processIIR(iirConfig &config);
+void processIIR(iirConfig &config); //process an IIR channel
 
-void IIRRecieve(int channel);
-void IIRRecieveDual(int channel);
+void IIRRecieve(int channel); //recieve new coefficients for LPF or HPF. channel == left or right (0, 1);
+void IIRRecieveDual(int channel); //recieve new coefficients for BPF or BSF. channel == left or right (0, 1);
 
-void printIIRData(iirChannel &channel);
-void printFilterData(iirConfig &filter);
-extern iirChannel iirL, iirR;
+void printIIRData(iirChannel &channel); //debug print. Prints coefficients.
+void printFilterData(iirConfig &filter); //
+
+extern iirChannel iirL, iirR; //two IIR Channels for stereo.
 
 
-//extern int* IIRcoeffsL_L, IIRcoeffsR_L, IIRcoeffsL_H, IIRcoeffsR_H;
-//extern long* IIRdelayBufferL_L, IIRdelayBufferR_L, IIRdelayBufferL_H, IIRdelayBufferR_H;
+//external buffers.
 extern int IIRcoeffsL_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
 extern long IIRdelayBufferL_L[IIR_DELAY_BUF_SIZE];
 

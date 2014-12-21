@@ -195,9 +195,10 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
   }
 }
 
-void deconfigureIIRChannel(iirChannel)
+void deconfigureIIRChannel(iirChannel &channel)
 {
-
+  channel.lpf = initIIR(0,0);
+  channel.hpf = initIIR(0,0);
 }
 
 void IIRProcessChannel(iirChannel &channel)
