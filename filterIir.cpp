@@ -40,28 +40,32 @@ long IIRdelayBufferL_H[IIR_DELAY_BUF_SIZE] = {0};
 int IIRcoeffsR_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
 long IIRdelayBufferR_H[IIR_DELAY_BUF_SIZE] = {0};
 
-void loadfilterIIR(char* ftype, char *fresponse, char *fpass, int Hz, int* target, int order)
+void loadfilterIIR(char *fresponse, char *fpass, int Hz, int* target, int order)
 {
   File          fileHandle;
   //int newCoeffs[FILTER_LENGTH_MAX] = {0};
 
   long shortHz = Hz;
-  shortHz -= 10; //lowest cutoff frequency = 10Hz
-  int fileBin = shortHz / FILE_CHUNK; //alias to 1000Hz files.
-  shortHz %= FILE_CHUNK; //alias to 1000Hz bins.
   shortHz *= order; //201 tap long filters;
-  shortHz *= 2; // 2 bytes per tap;
+  shortHz *= COEFFS_PER_BIQUAD; // 2 bytes per coefficient, 7 coefficients per biquad 2nd order per biquad;
   char fileName[32];
-  sprintf(fileName, "%s/%d/%s/%d.flt",ftype,fresponse,order,fpass,fileBin); //default file name
-
+  sprintf(fileName, "iir/%s/%s%d.iir",fresponse,fpass,order); //default file name
+  Serial.begin(115200);
+  Serial.println(fileName);
+  Serial.println(fresponse);
+  Serial.println(fpass);
+  Serial.println(Hz);
+  Serial.println(order);
+  
 #ifdef AUDIO_INTERRUPTION
   AudioC.detachIntr(); //turning off the audio fixes audio / sd card collision
 #endif
   fileHandle = SD.open(fileName, FILE_READ);
   if(fileHandle)
   {
-
-    fileHandle.seek(shortHz);
+    int offset;
+    fileHandle.read(&offset,2);
+    fileHandle.seek(shortHz - offset);
     fileHandle.read(target, order); //load the data
     fileHandle.close();
 
@@ -69,9 +73,14 @@ void loadfilterIIR(char* ftype, char *fresponse, char *fpass, int Hz, int* targe
     {
       int temp = target[i];
       target[i] = ((temp & 0x00FF)<<8) + ((temp & 0xFF00)>>8);
+      Serial.print(target[i]);
     }          
   }
-
+  else
+  {
+    Serial.println("File Open Failed.");
+  }
+  Serial.end();
 #ifdef AUDIO_INTERRUPTION
   bool status = AudioC.Audio(TRUE);
   AudioC.setSamplingRate(SAMPLING_RATE_44_KHZ);
@@ -172,7 +181,7 @@ void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* buff
     //band stop filter, configured such that the filters are paralleled. 
     //in->[lpf]->intermediate, in->[hpf]->out, (out + intermediate) / 2 -> out 
     //(handled by the IIRProcessChannel function)
-    channel.lpf.src = bufferin;
+    channel.lpf.src = bufferint;
     channel.lpf.dst = bufferint;
 
     channel.hpf.src = bufferin;
@@ -218,18 +227,19 @@ void IIRProcessChannel(iirChannel &channel)
   }
   else if(channel.mode == BAND_STOP) //band stop
   {
-    processIIR(channel.lpf);
+    memcpy(channel.lpf.src, channel.hpf.src, I2S_DMA_BUF_LEN);
     processIIR(channel.hpf);
+    processIIR(channel.lpf);
     IIRsumChannels(channel.hpf, channel.lpf, I2S_DMA_BUF_LEN);
   }
 
 }
 
-inline void IIRsumChannels(iirConfig &one, iirConfig &two, int len) //sums the output buffers of two iirConfigs, divided by two to prevent overflows. Stores the result in one.
+void IIRsumChannels(iirConfig &one, iirConfig &two, int len) //sums the output buffers of two iirConfigs, divided by two to prevent overflows. Stores the result in one.
 {
   for(int i = 0; i < len; i++)
   {
-    one.dst[i] = (one.dst[i] >> 1) + (two.dst[i] >> 1); //prevents overflow.
+    one.dst[i] += two.dst[i];
   }
 }
 void printFilterData(iirConfig &filter)
@@ -389,4 +399,126 @@ void IIRRecieveDual(int channel)
      //printIIRData(iirL);
      //printIIRData(iirR);
      free(newData);
+}
+
+void IIRLoad(int command, int channel)
+{
+   //grab pass, response, cutoff1   
+   int pass = (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4];
+   int response = (shieldMailbox.inbox[7]<<8) + shieldMailbox.inbox[6];
+   int order = (shieldMailbox.inbox[9]<<8) + shieldMailbox.inbox[8];
+   int cutoff = (shieldMailbox.inbox[11]<<8) + shieldMailbox.inbox[10];
+   int target[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
+   
+   char *fresponse;
+   if(response == TYPE_BUTTER)
+   {
+     fresponse = "butter";
+   }
+   else if(response == TYPE_BESSEL)
+   {
+     fresponse = "bessel";
+   }
+   else if(response == TYPE_ELLIP)
+   {
+     fresponse = "ellip";
+   }
+   else if(response == TYPE_CHEBY)
+   {
+     fresponse = "cheby";
+   }
+   
+   char *fpass;
+   if(pass == HIGH_PASS)
+   {
+     fpass = "hpf";
+   }
+   else
+   {
+     fpass = "lpf";
+   }   
+   loadfilterIIR(fresponse, fpass, cutoff, target, order); //low / high pass
+   
+   if(pass == HIGH_PASS)
+   {
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       iirL.hpf.order = order;
+       memcpy(iirL.hpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       iirR.hpf.order = order;
+       memcpy(iirR.hpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       iirL.hpf.order = order;
+       memcpy(iirL.hpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+       
+       iirR.hpf.order = order;
+       memcpy(iirR.hpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+   }
+   else
+   {
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       iirL.lpf.order = order;
+       memcpy(iirL.lpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       iirR.lpf.order = order;
+       memcpy(iirR.lpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       iirL.lpf.order = order;
+       memcpy(iirL.lpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+       
+       iirR.lpf.order = order;
+       memcpy(iirR.lpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+   }
+   
+   
+   if(command == 9) //band pass / stop
+   {
+     int cutoff = (shieldMailbox.inbox[11]<<8) + shieldMailbox.inbox[10];  //cutoff 2 for band pass / stop   
+     fpass = "hpf";
+     loadfilterIIR(fresponse, fpass, cutoff, target, order); //low / high pass
+     if (channel == CHAN_LEFT) //channel 0 == left
+     {
+       iirL.hpf.order = order;
+       memcpy(iirL.hpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_RIGHT) //channel 1 == right
+     {
+       iirR.hpf.order = order;
+       memcpy(iirR.hpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+     else if (channel == CHAN_BOTH) //channel 2 == both
+     {
+       iirL.hpf.order = order;
+       memcpy(iirL.hpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+       
+       iirR.hpf.order = order;
+       memcpy(iirR.hpf.coeffs, target, order/2*COEFFS_PER_BIQUAD);
+     }
+   }
+   
+   if(channel == CHAN_LEFT)
+   {
+     configureIIRChannel(iirL,pass,filterIn1, filterOut1, filterInt1); //configure blocks
+   }
+   else if(channel == CHAN_RIGHT)
+   {
+     configureIIRChannel(iirR,pass,filterIn2, filterOut2, filterInt2);
+   }
+   else if(channel == CHAN_BOTH)
+   {
+     configureIIRChannel(iirL,pass,filterIn1, filterOut1, filterInt1); //configure blocks
+     configureIIRChannel(iirR,pass,filterIn2, filterOut2, filterInt2);
+   }
 }

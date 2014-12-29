@@ -86,10 +86,8 @@ interrupt void dmaIsr(void)
       }
       else if(inputCodec == 1)
       {
-        copyShortBuf(AudioC.audioInLeft[AudioC.activeInBuf],
-                     filterIn1, I2S_DMA_BUF_LEN);
-        copyShortBuf(AudioC.audioInRight[AudioC.activeInBuf],
-                     filterIn2, I2S_DMA_BUF_LEN);
+        copyShortBuf(AudioC.audioInLeft[AudioC.activeInBuf], filterIn1, I2S_DMA_BUF_LEN);
+        copyShortBuf(AudioC.audioInRight[AudioC.activeInBuf], filterIn2, I2S_DMA_BUF_LEN);
       }
         readyForFilter = 1;
     }
@@ -100,10 +98,10 @@ interrupt void dmaIsr(void)
             /* Filtered buffers need to be copied to audio out buffers as
                audio library is configured for non-loopback mode */
             writeBufIndex = (AudioC.activeOutBuf == FALSE)? TRUE: FALSE;
-            copyShortBuf(iirL.hpf.dst, AudioC.audioOutLeft[writeBufIndex],
-                         I2S_DMA_BUF_LEN);
-            copyShortBuf(iirR.hpf.dst, AudioC.audioOutRight[writeBufIndex],
-                         I2S_DMA_BUF_LEN);
+            copyShortBuf(iirL.hpf.dst, AudioC.audioOutLeft[writeBufIndex], I2S_DMA_BUF_LEN);
+            copyShortBuf(iirR.hpf.dst, AudioC.audioOutRight[writeBufIndex], I2S_DMA_BUF_LEN);
+            //copyShortBuf(filterOut1, AudioC.audioOutLeft[writeBufIndex], I2S_DMA_BUF_LEN);
+            //copyShortBuf(filterOut2, AudioC.audioOutRight[writeBufIndex], I2S_DMA_BUF_LEN);
             filterBufAvailable = 0;
         }
     }
@@ -130,12 +128,14 @@ interrupt void dmaIsr(void)
         {
           // Filter Left Audio Channel
           filter_fir(iirL.hpf.dst, FIRcoeffsL, iirL.hpf.dst, delayBufferL, I2S_DMA_BUF_LEN, filterLen);
+          //filter_fir(filterIn1, FIRcoeffsL, filterOut1, delayBufferL, I2S_DMA_BUF_LEN, filterLen);
         }
 
         if(FIRTagR) //FIR Filtering
         {
           // Filter Right Audio Channel
           filter_fir(iirR.hpf.dst, FIRcoeffsR, iirR.hpf.dst, delayBufferR, I2S_DMA_BUF_LEN, filterLen);
+          //filter_fir(filterIn2, FIRcoeffsR, filterOut2, delayBufferR, I2S_DMA_BUF_LEN, filterLen);
         }
         filterBufAvailable = 1; //send output data on next interrupt
         
@@ -266,17 +266,8 @@ void readFilter()
      IIRRecieve(channel);
      break;
    case 8: //IIR Load. Next byte is Type (butter, bessel, etc) then following byte is Pass (high low etc))
-     //CODE HERE
-     break;   
-   case 9: //IIR toggle
-      if(iirL.lpf.enabled == 0)
-       iirL.lpf.enabled = 1;
-     else
-       iirL.lpf.enabled = 0;    
-      if(iirR.lpf.enabled == 0)
-       iirR.lpf.enabled = 1;
-     else
-       iirR.lpf.enabled = 0;    
+   case 9:
+     IIRLoad(command, channel);
      break;
    case 10: //initialize DDS
      ddsToneStart(channel, command);
@@ -304,6 +295,16 @@ void readFilter()
      break;
    case 18: //dual IIR filter transmission.
      IIRRecieveDual(channel);
+     break;
+   case 19: //IIR toggle
+      if(iirL.lpf.enabled == 0)
+       iirL.lpf.enabled = 1;
+     else
+       iirL.lpf.enabled = 0;    
+      if(iirR.lpf.enabled == 0)
+       iirR.lpf.enabled = 1;
+     else
+       iirR.lpf.enabled = 0;    
      break;
    }
   //friendly messaged recieve LED toggle.

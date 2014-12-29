@@ -23,6 +23,11 @@
 #define BAND_PASS 3
 #define BAND_STOP 4
 
+#define TYPE_BUTTER 0
+#define TYPE_BESSEL 1
+#define TYPE_ELLIP 2
+#define TYPE_CHEBY 3
+
 #define LEFT 0
 #define RIGHT 1
 
@@ -45,7 +50,7 @@ struct iirChannel {
 iirConfig initIIR(); //initialize channel without configuring filter buffers
 iirConfig initIIR(long* buffer, int *coeff); //initialize channel
 
-void loadfilterIIR(char *ftype, char *fresponse, char *fpass, int Hz, int *target, int order); //loads an IIR filter into a buffer (target) from disk.
+void loadfilterIIR(char *fresponse, char *fpass, int Hz, int *target, int order); //loads an IIR filter into a buffer (target) from disk.
 void recvfilterIIR(iirConfig &config, int order, int *coeffs); //loads an IIR filter into a buffer (config) from disk.
 
 void IIRsumChannels(iirConfig &one, iirConfig &two, int len); //sums the output buffers of two iirConfigs, divided by two to prevent overflos
@@ -61,7 +66,7 @@ void IIRRecieveDual(int channel); //recieve new coefficients for BPF or BSF. cha
 
 void printIIRData(iirChannel &channel); //debug print. Prints coefficients.
 void printFilterData(iirConfig &filter); //
-
+void IIRLoad(int command, int channel);
 extern iirChannel iirL, iirR; //two IIR Channels for stereo.
 
 
