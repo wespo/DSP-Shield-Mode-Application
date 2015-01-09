@@ -50,7 +50,7 @@ struct iirChannel {
 iirConfig initIIR(); //initialize channel without configuring filter buffers
 iirConfig initIIR(long* buffer, int *coeff); //initialize channel
 
-void loadfilterIIR(char *fresponse, char *fpass, int Hz, int *target, int order); //loads an IIR filter into a buffer (target) from disk.
+int loadfilterIIR(char *fresponse, char *fpass, int Hz, int *target, int order); //loads an IIR filter into a buffer (target) from disk.
 void recvfilterIIR(iirConfig &config, int order, int *coeffs); //loads an IIR filter into a buffer (config) from disk.
 
 void IIRsumChannels(iirConfig &one, iirConfig &two, int len); //sums the output buffers of two iirConfigs, divided by two to prevent overflos

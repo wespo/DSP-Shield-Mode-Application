@@ -68,7 +68,6 @@ inline void setXF(bool togg) //macro to toggle XF LED on DSP Shield
   else
     asm(" BIT(ST1, #13) = #0");
 }
-
 // DMA Interrupt Service Routine
 interrupt void dmaIsr(void)
 {
@@ -97,7 +96,7 @@ interrupt void dmaIsr(void)
         {
             /* Filtered buffers need to be copied to audio out buffers as
                audio library is configured for non-loopback mode */
-            writeBufIndex = (AudioC.activeOutBuf == FALSE)? TRUE: FALSE;
+            writeBufIndex = (AudioC.activeOutBuf == FALSE)? TRUE: FALSE; //OH GOD, WHY?
             copyShortBuf(iirL.hpf.dst, AudioC.audioOutLeft[writeBufIndex], I2S_DMA_BUF_LEN);
             copyShortBuf(iirR.hpf.dst, AudioC.audioOutRight[writeBufIndex], I2S_DMA_BUF_LEN);
             //copyShortBuf(filterOut1, AudioC.audioOutLeft[writeBufIndex], I2S_DMA_BUF_LEN);

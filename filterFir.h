@@ -52,13 +52,13 @@ void loadfilter(char* ftype, char *fpass, int Hz, int* target, int targetLength)
 //    fileName[0] = ftype[0];
 //    fileName[4] = fpass[0];
       
-    Serial.begin(115200);    
-    Serial.print("Freq: ");
-    Serial.println(Hz);
-    Serial.print("Taps: ");
-    Serial.println(targetLength);
-    Serial.println(fileName);
-    Serial.end();
+//    Serial.begin(115200);    
+//    Serial.print("Freq: ");
+//    Serial.println(Hz);
+//    Serial.print("Taps: ");
+//    Serial.println(targetLength);
+//    Serial.println(fileName);
+//    Serial.end();
 
     //if (TRUE == status)
     if(1)
@@ -212,6 +212,7 @@ void FIRLoad(int channel, int command)
          FIRTagL = 1;
          FIRTagR = 1;       
        }
+       free(newData);
      }
      else if(command == 4 || command == 5)
      {
