@@ -7,6 +7,7 @@
 #include "core.h"
 #include "SD.h"
 #include "Audio.h"
+#include "mailbox.h"
 #include <math.h>
 
 #define CHAN_LEFT 0
@@ -45,6 +46,11 @@ long computeRamp(float fStart, float fEnd, unsigned int duration);
 
 ddsConfig ddsInit(int command, float fStart, float fEnd, float gain, int chirpLoop, unsigned int duration, int sumMode, int type);
 
+void ddsChirpStart(int channel, int command);
+void ddsToneStart(int channel, int command);
+void ddsStop(int channel);
+
 extern int phase_to_amplitude_l[DDS_LENGTH];
 extern int phase_to_amplitude_r[DDS_LENGTH];
+extern ddsConfig ddsConfigLeft, ddsConfigRight;
 #endif

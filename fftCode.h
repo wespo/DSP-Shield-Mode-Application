@@ -55,4 +55,8 @@ void updateSpectrumPointer(fftConfig &config, int* in, int* out, int ** codec); 
 void spectrum(fftConfig &config); //takes a signal and returns the power spectrum;
 void sendSpectrum(fftConfig &config); //sends the current spectrum for the given configuration
 void loadWindow(fftConfig &config);
+void initializeFFTSpectrum(int channel);
+void disableFFTSpectrum(int channel);
+
+extern fftConfig fftConfigLeft, fftConfigRight;
 #endif

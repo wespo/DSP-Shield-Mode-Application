@@ -1,104 +1,86 @@
+#ifndef _IIRCODE_H_INCLUDED	//prevent mailbox library from being invoked twice and breaking the namespace
+#define _IIRCODE_H_INCLUDED
+
+#include "core.h"
+#include "SD.h"
+#include "Audio.h"
+#include "filter.h"
+
 //IIR Buffers
 #define IIR_ORDER_MAX    (40)
 #define DELAY_COUNT      (5)
 #define COEFFS_PER_BIQUAD (7)
-#define IIR_DELAY_BUF_SIZE   ((IIR_ORDER_MAX/2)*(DELAY_COUNT))
+#define IIR_DELAY_BUF_SIZE   (200)//((IIR_ORDER_MAX/2)*(DELAY_COUNT))
 
-volatile int IIRTagL = 0;
-volatile int IIRTagR = 0;
-#pragma DATA_ALIGN(32);
-int IIRcoeffsL[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
-int IIRGainL = 1;
-int IIRcoeffsR[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2] = {0};
-int IIRGainR = 1;
-int IIROrderL = 0;
-int IIROrderR = 0;
-// Delay buffer used by the IIR filtering algorithm for Left Channel
-#pragma DATA_ALIGN(32);
-long IIRdelayBufferL[IIR_DELAY_BUF_SIZE] = {0};
+//general defines
+#define CHAN_LEFT 0
+#define CHAN_RIGHT 1
+#define CHAN_BOTH 2
 
-// Delay buffer used by the IIR filtering algorithm for Right Channel
-#pragma DATA_ALIGN(32);
-long IIRdelayBufferR[IIR_DELAY_BUF_SIZE] = {0};
-void loadfilterIIR(char* ftype, char *fresponse, char *fpass, int Hz, int* target, int order)
-{
-    File          fileHandle;
-    //int newCoeffs[FILTER_LENGTH_MAX] = {0};
-    
-    long shortHz = Hz;
-    shortHz -= 10; //lowest cutoff frequency = 10Hz
-    int fileBin = shortHz / FILE_CHUNK; //alias to 1000Hz files.
-    shortHz %= FILE_CHUNK; //alias to 1000Hz bins.
-    shortHz *= targetLength; //201 tap long filters;
-    shortHz *= 2; // 2 bytes per tap;
-    char fileName[32];
-    sprintf(fileName, "%s/%d/%s/%d.flt",ftype,fresponse,order,fpass,fileBin); //default file name
-    
-//    for(int i = 0; i<3; i++)
-//    {
-//      fileName[i] = ftype[i];
-//      fileName[i+4] = fpass[i];
-//    }
-//    fileName[0] = ftype[0];
-//    fileName[4] = fpass[0];
-      
-//    Serial.begin(115200);    
-//    Serial.print("Freq: ");
-//    Serial.println(Hz);
-//    Serial.print("Taps: ");
-//    Serial.println(targetLength);
-//    Serial.println(fileName);
-//    Serial.end();
+#define ALL_PASS 1
+#define LOW_PASS 1
+#define HIGH_PASS 2
+#define BAND_PASS 3
+#define BAND_STOP 4
 
-    //if (TRUE == status)
-    if(1)
-     {
-       #ifdef AUDIO_INTERRUPTION
-       AudioC.detachIntr(); //turning off the audio fixes audio / sd card collision
-       #endif
-       fileHandle = SD.open(fileName, FILE_READ);
-        if(fileHandle)
-        {
+#define TYPE_BUTTER 0
+#define TYPE_BESSEL 1
+#define TYPE_ELLIP 2
+#define TYPE_CHEBY 3
 
-          fileHandle.seek(shortHz);
-//        for(int i = 0; i < targetLength; i++)
-//        {
-//          int coeff;
-//          fileHandle.read((char*) &coeff, 1);
-//          int coeff2;
-//          fileHandle.read((char*) &coeff2, 1);
-//          coeff = (coeff2<<8) + coeff;
-//          target[i] = coeff;
-//        }
-         fileHandle.read(target, targetLength); //load the data
-         fileHandle.close();
-        
-          for(int i = 0; i < targetLength; i++) //fix endian-ness of dataset.
-         {
-           int temp = target[i];
-           target[i] = ((temp & 0x00FF)<<8) + ((temp & 0xFF00)>>8);
-         }          
-         //memcpy(target, newCoeffs, targetLength);
-        }
-//        else
-//        {
-////          Serial.begin(115200);    
-////          Serial.println("File Open Failed");
-////          Serial.end();
-//        }
-       #ifdef AUDIO_INTERRUPTION
-       bool status = AudioC.Audio(TRUE);
-       AudioC.setSamplingRate(SAMPLING_RATE_44_KHZ);
-       if (status == 0)
-       {
-         AudioC.attachIntr(dmaIsr);
-       }
-       #endif
+#define LEFT 0
+#define RIGHT 1
 
-//   else //failed file load LED Flag.
-//   {
-//       asm(" BIT(ST1, #13) = #1"); //flag that we had an incident and try to recover from it.
-//   }
-     }
-}
+//each struct contains two filter blocks, and 
+struct iirConfig {
+  int* src;
+  int* dst;
+  int* coeffs;
+  int  order;
+  long* delayBuf;
+  int  enabled;
+};
 
+struct iirChannel {
+  iirConfig hpf;
+  iirConfig lpf;
+  int mode; //lpf, hpf, bpf, bsf 
+};
+
+iirConfig initIIR(); //initialize channel without configuring filter buffers
+iirConfig initIIR(long* buffer, int *coeff); //initialize channel
+
+int loadfilterIIR(char *fresponse, char *fpass, int Hz, int *target, int order); //loads an IIR filter into a buffer (target) from disk.
+void recvfilterIIR(iirConfig &config, int order, int *coeffs); //loads an IIR filter into a buffer (config) from disk.
+
+void IIRsumChannels(iirConfig &one, iirConfig &two, int len); //sums the output buffers of two iirConfigs, divided by two to prevent overflos
+void IIRProcessChannel(iirChannel &channel); //process both iir filters in the channel.
+iirChannel newIIRChannel(long* bufferL, long* bufferH, int* coeffL, int* coeffH); //initailize the channel.
+void configureIIRChannel(iirChannel &channel, int mode, int* bufferin, int* bufferout, int* bufferint); //configure the channel's input and output buffers.
+void deconfigureIIRChannel(iirChannel &channel); //disable channel, point everything to zero (watch out).
+
+void processIIR(iirConfig &config); //process an IIR channel
+
+void IIRRecieve(int channel); //recieve new coefficients for LPF or HPF. channel == left or right (0, 1);
+void IIRRecieveDual(int channel); //recieve new coefficients for BPF or BSF. channel == left or right (0, 1);
+
+void printIIRData(iirChannel &channel); //debug print. Prints coefficients.
+void printFilterData(iirConfig &filter); //
+void IIRLoad(int command, int channel);
+extern iirChannel iirL, iirR; //two IIR Channels for stereo.
+
+
+//external buffers.
+extern int IIRcoeffsL_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
+extern long IIRdelayBufferL_L[IIR_DELAY_BUF_SIZE];
+
+extern int IIRcoeffsR_L[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
+extern long IIRdelayBufferR_L[IIR_DELAY_BUF_SIZE];
+
+extern int IIRcoeffsL_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
+extern long IIRdelayBufferL_H[IIR_DELAY_BUF_SIZE];
+
+extern int IIRcoeffsR_H[COEFFS_PER_BIQUAD*IIR_ORDER_MAX/2];
+extern long IIRdelayBufferR_H[IIR_DELAY_BUF_SIZE];
+
+#endif
