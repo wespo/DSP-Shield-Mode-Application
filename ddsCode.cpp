@@ -131,6 +131,13 @@ void loadWave(int type, int channel, bool doubleBuffFlag) //int* target
      fileName[5] = 'a';
      fileName[6] = 'w';
    }
+   else if(type == WAV_WHT) //white noise
+   {
+     fileName[4] = 'w';
+     fileName[5] = 'h';
+     fileName[6] = 't';
+   }
+
 
     //if (TRUE == status)
     if(1)

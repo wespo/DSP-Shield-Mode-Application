@@ -19,6 +19,7 @@
 #define WAV_SQU 1
 #define WAV_TRI 2
 #define WAV_SAW 3
+#define WAV_WHT 4
 
 struct ddsConfig {
 	int enable;

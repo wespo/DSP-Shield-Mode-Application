@@ -14,6 +14,10 @@
 //FIR Filtering
 #include "filterFir.h"
 
+//Channel mathematical operations
+#include "channelMath.h"
+mathChannelConfig mathChannel;
+    
 //general defines
 #define CHAN_LEFT 0
 #define CHAN_RIGHT 1
@@ -119,6 +123,9 @@ interrupt void dmaIsr(void)
         ddsGen(ddsConfigLeft, filterIn1, I2S_DMA_BUF_LEN);
         ddsGen(ddsConfigRight, filterIn2, I2S_DMA_BUF_LEN);
 
+        //channel math
+        processMathChannels(mathChannel);
+
         //IIR Filtering
         IIRProcessChannel(iirL);
         IIRProcessChannel(iirR);
@@ -202,6 +209,9 @@ void setup()
     ddsConfigInit(ddsConfigLeft);
     ddsConfigInit(ddsConfigRight);
     
+    //set up channel math
+    mathChannelInit(filterIn1, filterIn1, filterIn2, filterIn2, mathChannel);
+
     //Initialize FFT for both channels
     fftConfigLeft = FFTInit();
     fftConfigRight = FFTInit();
@@ -311,6 +321,8 @@ void readFilter()
    case 21: //input gain control.
       AudioC.setInputGain((shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4],(shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4]);
      break;
+   case 22: // channel math operations
+      mathChannelMode(mathChannel, channel, (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4]);
    }
   //friendly messaged recieve LED toggle.
   if(ledBlink)
