@@ -17,7 +17,13 @@
 //Channel mathematical operations
 #include "channelMath.h"
 mathChannelConfig mathChannel;
-    
+
+
+//reverb
+#include "reverb.h"
+reverbClass reverbL;
+reverbClass reverbR;
+
 //general defines
 #define CHAN_LEFT 0
 #define CHAN_RIGHT 1
@@ -125,6 +131,10 @@ interrupt void dmaIsr(void)
 
         //channel math
         processMathChannels(mathChannel);
+        
+        //reverb
+        reverbL.processReverb();
+        reverbR.processReverb();
 
         //IIR Filtering
         IIRProcessChannel(iirL);
@@ -211,6 +221,10 @@ void setup()
     
     //set up channel math
     mathChannelInit(filterIn1, filterIn1, filterIn2, filterIn2, mathChannel);
+    
+    //initialize reverb channels
+    reverbL.init(0, filterIn1, filterIn1);
+    reverbR.init(0, filterIn2, filterIn2);
 
     //Initialize FFT for both channels
     fftConfigLeft = FFTInit();
@@ -323,6 +337,17 @@ void readFilter()
      break;
    case 22: // channel math operations
       mathChannelMode(mathChannel, channel, (shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4]);
+      break;
+   case 23: //reverb
+     if((channel == CHAN_LEFT) || (channel == CHAN_BOTH))
+     {
+       reverbL.setReverbDelay((shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4]);
+     }
+     if((channel == CHAN_RIGHT) || (channel == CHAN_BOTH))
+     {
+       reverbR.setReverbDelay((shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4]);
+     }
+     break;
    }
   //friendly messaged recieve LED toggle.
   if(ledBlink)
