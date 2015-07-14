@@ -39,8 +39,6 @@ reverbClass reverbR;
 
 //mailbox message toolboxes
 #include "mailbox.h"
-#include "messageStateMachine.h" //extension for the mailbox library that enables the reading of a message one byte at a time instead of all at once.
-messageStateData arduinoMessageState; //struct with state data for message state machine.
 
 //spectrum analysis
 #include "fftCode.h"
@@ -238,14 +236,12 @@ void setup()
     configureIIRChannel(iirL,ALL_PASS,filterIn1, filterOut1, filterInt1); 
     configureIIRChannel(iirR,ALL_PASS,filterIn2, filterOut2, filterInt2);
     
-    //initialize mailbox per byte state machine.
-    arduinoMessageState = initMessageStateData(arduinoMessageState);
-   
 }
 
 int heartbeat = 0;
 void loop()
 {
+  shieldMailbox.receive();
   if(heartbeat == 1)
   {
     heartbeat = 0;
@@ -256,10 +252,7 @@ void loop()
   }
   digitalWrite(LED1, heartbeat);
   
-  if(messageStateMachine(arduinoMessageState))
-  {
-    readFilter();
-  }
+
   sendSpectrum(fftConfigLeft); //send the spectrum if needed.
   sendSpectrum(fftConfigRight);
   delayMicroseconds(10);
