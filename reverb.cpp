@@ -20,7 +20,7 @@ void reverbClass::init(int delaySamps, int* in, int* out)
 
 void reverbClass::setReverbDelay(int delaySamps)
 {
-  if(delaySamps > MAX_DELAY) //protect against eating too much memory.
+  if(delaySamps > MAX_DELAY) //protect against overrunning the buffer
   {
     delaySamps = MAX_DELAY;
   }
@@ -57,15 +57,5 @@ void reverbClass::processReverb()
       output[i] = input[i] + reverbBuffer[index];
     }
     reverbPointer = (reverbPointer + I2S_DMA_BUF_LEN) % (reverbLength + I2S_DMA_BUF_LEN);
-    /*
-    //algorithmically works, extra buffer copy
-    memcpy(&reverbBuffer[reverbLength], input, I2S_DMA_BUF_LEN); //copy input
-    add((DATA *) reverbBuffer, (DATA *) input, (DATA *)  output, I2S_DMA_BUF_LEN, 0); //add reverb back in
-    for(int i = 0; i < reverbLength; i++)
-    {
-      reverbBuffer[i] = reverbBuffer[i + I2S_DMA_BUF_LEN];
-    } 
- */
-     
   }
 }
