@@ -5,7 +5,7 @@
 
 #include "core.h"
 #include "SD.h"
-#include "Audio.h"
+#include "Audio_exposed.h"
 #include "mailbox.h"
 #include <math.h>
 #include "filter.h"

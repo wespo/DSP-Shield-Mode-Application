@@ -1,6 +1,6 @@
 #include "channelMath.h"
 #include <DSPLIB.h>
-#include "Audio.h"
+#include "Audio_exposed.h"
 
 void mathChannelInit(int* inL, int* outL, int* inR, int* outR, mathChannelConfig &config)
 {

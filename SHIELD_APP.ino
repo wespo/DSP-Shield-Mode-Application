@@ -2,7 +2,7 @@
 	 Multipurpose DSP App.
 	 Takes all sorts of commands from Arduino via SPI and performs signal processing.
  */
-#include "Audio.h"
+#include "Audio_exposed.h"
 #include "filter.h"
 #include "OLED.h"
 #include "SPI.h"
@@ -29,13 +29,11 @@ reverbClass reverbR;
 #define CHAN_RIGHT 1
 #define CHAN_BOTH 2
 
-#define LOW_PASS 1
-#define HIGH_PASS 2
-#define BAND_PASS 3
-#define BAND_STOP 4
-
 //DDS generation
 #include "ddsCode.h"
+
+//Noise generation
+#include "noise.h"
 
 //mailbox message toolboxes
 #include "mailbox.h"
@@ -126,6 +124,10 @@ interrupt void dmaIsr(void)
         //DDS Generation
         ddsGen(ddsConfigLeft, filterIn1, I2S_DMA_BUF_LEN);
         ddsGen(ddsConfigRight, filterIn2, I2S_DMA_BUF_LEN);
+        
+        noiseGen(noiseConfigLeft, filterIn1, I2S_DMA_BUF_LEN);
+        noiseGen(noiseConfigRight, filterIn2, I2S_DMA_BUF_LEN);
+
 
         //channel math
         processMathChannels(mathChannel);
@@ -216,6 +218,10 @@ void setup()
     //initialize DDS module for both left and right channels
     ddsConfigInit(ddsConfigLeft);
     ddsConfigInit(ddsConfigRight);
+
+    //initialize DDS module for both left and right channels
+    noiseConfigInit(noiseConfigLeft);
+    noiseConfigInit(noiseConfigRight);
     
     //set up channel math
     mathChannelInit(filterIn1, filterIn1, filterIn2, filterIn2, mathChannel);
@@ -340,6 +346,12 @@ void readFilter()
      {
        reverbR.setReverbDelay((shieldMailbox.inbox[5]<<8) + shieldMailbox.inbox[4]);
      }
+     break;
+   case 24: //noise start
+     noiseStart(channel);
+     break;
+   case 25: //noise stop
+     noiseStop(channel);
      break;
    }
   //friendly messaged recieve LED toggle.

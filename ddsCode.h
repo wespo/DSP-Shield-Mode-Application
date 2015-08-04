@@ -6,7 +6,7 @@
 
 #include "core.h"
 #include "SD.h"
-#include "Audio.h"
+#include "Audio_exposed.h"
 #include "mailbox.h"
 #include <math.h>
 
@@ -20,6 +20,10 @@
 #define WAV_TRI 2
 #define WAV_SAW 3
 #define WAV_WHT 4
+#define WAV_USR 5
+
+#define MUX_OVERWRITE 0
+#define MUX_SUM 1
 
 struct ddsConfig {
 	int enable;

@@ -1,7 +1,7 @@
 #ifndef _REVERB_H_INCLUDED	//prevent mailbox library from being invoked twice and breaking the namespace
 #define _REVERB_H_INCLUDED
 
-#include "Audio.h"
+#include "Audio_exposed.h"
 
 #define MAX_DELAY 7200
 

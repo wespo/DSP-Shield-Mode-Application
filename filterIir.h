@@ -3,7 +3,7 @@
 
 #include "core.h"
 #include "SD.h"
-#include "Audio.h"
+#include "Audio_exposed.h"
 #include "filter.h"
 
 //IIR Buffers

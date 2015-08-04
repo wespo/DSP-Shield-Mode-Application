@@ -1,6 +1,6 @@
 #include "reverb.h"
 #include <DSPLIB.h>
-#include "Audio.h"  
+#include "Audio_exposed.h"
 
 reverbClass::reverbClass()
 {
