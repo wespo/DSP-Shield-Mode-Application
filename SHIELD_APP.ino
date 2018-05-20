@@ -37,6 +37,7 @@ reverbClass reverbR;
 
 //mailbox message toolboxes
 #include "mailbox.h"
+#include "messageStateMachine.h" //extension for the mailbox library that enables the reading of a message one byte at a time instead of all at once.
 
 //spectrum analysis
 #include "fftCode.h"
@@ -201,9 +202,6 @@ void setup()
     fillShortBuf(delayBufferL, 0, (FILTER_LENGTH_MAX + 2));       
     fillShortBuf(delayBufferR, 0, (FILTER_LENGTH_MAX + 2));       
     
-    /* Audio library is configured for non-loopback mode. Gives enough time for
-       FIR filter processing in ISR */
-    shieldMailbox.begin(SPI_MASTER, readFilter);
     
     //initialize SD Card
     status = SD.begin(1);
@@ -242,12 +240,18 @@ void setup()
     configureIIRChannel(iirL,ALL_PASS,filterIn1, filterOut1, filterInt1); 
     configureIIRChannel(iirR,ALL_PASS,filterIn2, filterOut2, filterInt2);
     
+        /* Audio library is configured for non-loopback mode. Gives enough time for
+       FIR filter processing in ISR */
+    shieldMailbox.begin(SPI_MASTER, readFilter);
+
+    
 }
 
 int heartbeat = 0;
 void loop()
 {
   shieldMailbox.receive();
+  delayMicroseconds(5);
   if(heartbeat == 1)
   {
     heartbeat = 0;
@@ -256,7 +260,7 @@ void loop()
   {
     heartbeat = 1;
   }
-  digitalWrite(LED1, heartbeat);
+//  digitalWrite(XF, heartbeat);
   
 
   sendSpectrum(fftConfigLeft); //send the spectrum if needed.
